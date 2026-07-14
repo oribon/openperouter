@@ -34,6 +34,7 @@ var _ = Describe("Router Host configuration", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		cs = k8sclient.New()
+		waitForNICRecovery(cs)
 		_, err = openperouter.Get(cs, HostMode)
 		Expect(err).NotTo(HaveOccurred())
 		frrk8sPods, err = frrk8s.Pods(cs)
@@ -50,8 +51,8 @@ var _ = Describe("Router Host configuration", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Configure leaf switches with node neighbors
-		Expect(infra.LeafKind1Config.UpdateConfig(nodes, infra.LeafKindConfiguration{})).To(Succeed())
-		Expect(infra.LeafKind2Config.UpdateConfig(nodes, infra.LeafKindConfiguration{})).To(Succeed())
+		Expect(infra.PeerLeaf1Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{})).To(Succeed())
+		Expect(infra.PeerLeaf2Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{})).To(Succeed())
 	})
 
 	AfterAll(func() {
@@ -77,7 +78,7 @@ var _ = Describe("Router Host configuration", Ordered, func() {
 	})
 
 	validateTORSessions := func() {
-		leaves := []string{infra.KindLeaf, infra.KindLeaf2}
+		leaves := []string{infra.PeerLeaf1, infra.PeerLeaf2}
 		for _, leaf := range leaves {
 			exec := executor.ForContainer(leaf)
 			Eventually(func() error {
@@ -538,7 +539,7 @@ var _ = Describe("Router Host configuration", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Validate sessions are down on both leaf nodes
-		leaves := []string{infra.KindLeaf, infra.KindLeaf2}
+		leaves := []string{infra.PeerLeaf1, infra.PeerLeaf2}
 		for _, leaf := range leaves {
 			exec := executor.ForContainer(leaf)
 			for _, node := range nodes {
@@ -559,6 +560,7 @@ var _ = Describe("Underlay external and internal configuration", Ordered, func()
 		Expect(err).NotTo(HaveOccurred())
 
 		cs = k8sclient.New()
+		waitForNICRecovery(cs)
 		nodesItems, err := cs.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		nodes = nodesItems.Items
@@ -579,29 +581,30 @@ var _ = Describe("Underlay external and internal configuration", Ordered, func()
 	BeforeEach(func() {
 		err := Updater.CleanAll()
 		Expect(err).NotTo(HaveOccurred())
+		waitForNICRecovery(cs)
 	})
 
 	AfterEach(func() {
 		dumpIfFails(cs)
-		Expect(infra.LeafKind1Config.UpdateConfig(nodes, infra.LeafKindConfiguration{})).To(Succeed())
-		Expect(infra.LeafKind2Config.UpdateConfig(nodes, infra.LeafKindConfiguration{})).To(Succeed())
+		Expect(infra.PeerLeaf1Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{})).To(Succeed())
+		Expect(infra.PeerLeaf2Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{})).To(Succeed())
 		err := Updater.CleanAll()
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	validateTORSession := func() {
-		exec := executor.ForContainer(infra.KindLeaf)
+		exec := executor.ForContainer(infra.PeerLeaf1)
 		for _, node := range nodes {
-			neighborIP, err := infra.NeighborIP(infra.KindLeaf, node.Name)
+			neighborIP, err := infra.NeighborIP(infra.PeerLeaf1, node.Name)
 			Expect(err).NotTo(HaveOccurred())
-			validateSessionWithNeighbor(infra.KindLeaf, node.Name, exec, neighborIP, Established)
+			validateSessionWithNeighbor(infra.PeerLeaf1, node.Name, exec, neighborIP, Established)
 		}
 	}
 
 	It("peers with the tor with BGP external", func() {
 		By("ensuring leafkind expects eBGP with PE ASN 64514")
-		Expect(infra.LeafKind1Config.UpdateConfig(nodes, infra.LeafKindConfiguration{})).To(Succeed())
-		Expect(infra.LeafKind2Config.UpdateConfig(nodes, infra.LeafKindConfiguration{})).To(Succeed())
+		Expect(infra.PeerLeaf1Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{})).To(Succeed())
+		Expect(infra.PeerLeaf2Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{})).To(Succeed())
 
 		underlay := *infra.Underlay.DeepCopy()
 		underlay.Spec.Neighbors[0].ASN = nil
@@ -617,8 +620,8 @@ var _ = Describe("Underlay external and internal configuration", Ordered, func()
 
 	It("peers with the tor with BGP internal", func() {
 		By("reconfiguring leafkind for iBGP (PERouterASN=64512)")
-		Expect(infra.LeafKind1Config.UpdateConfig(nodes, infra.LeafKindConfiguration{PERouterASN: 64512, NextHopSelf: true})).To(Succeed())
-		Expect(infra.LeafKind2Config.UpdateConfig(nodes, infra.LeafKindConfiguration{PERouterASN: 64512, NextHopSelf: true})).To(Succeed())
+		Expect(infra.PeerLeaf1Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{PERouterASN: 64512, NextHopSelf: true})).To(Succeed())
+		Expect(infra.PeerLeaf2Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{PERouterASN: 64512, NextHopSelf: true})).To(Succeed())
 
 		underlay := *infra.Underlay.DeepCopy()
 		underlay.Spec.ASN = 64512
@@ -635,8 +638,8 @@ var _ = Describe("Underlay external and internal configuration", Ordered, func()
 
 	It("peers with the tor with iBGP with ASN number", func() {
 		By("reconfiguring leafkind for iBGP (PERouterASN=64512)")
-		Expect(infra.LeafKind1Config.UpdateConfig(nodes, infra.LeafKindConfiguration{PERouterASN: 64512, NextHopSelf: true})).To(Succeed())
-		Expect(infra.LeafKind2Config.UpdateConfig(nodes, infra.LeafKindConfiguration{PERouterASN: 64512, NextHopSelf: true})).To(Succeed())
+		Expect(infra.PeerLeaf1Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{PERouterASN: 64512, NextHopSelf: true})).To(Succeed())
+		Expect(infra.PeerLeaf2Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{PERouterASN: 64512, NextHopSelf: true})).To(Succeed())
 
 		underlay := *infra.Underlay.DeepCopy()
 		underlay.Spec.ASN = int64(64512)
@@ -689,14 +692,14 @@ var _ = Describe("Underlay BFD Configuration", Ordered, func() {
 
 		neighbors := []string{}
 		for _, node := range nodes {
-			neighborIP, err := infra.NeighborIP(infra.KindLeaf, node.Name)
+			neighborIP, err := infra.NeighborIP(infra.PeerLeaf1, node.Name)
 			Expect(err).NotTo(HaveOccurred())
 			neighbors = append(neighbors, neighborIP)
 		}
 
 		// Enable BFD on both leaf switches
-		Expect(infra.LeafKind1Config.UpdateConfig(nodes, infra.LeafKindConfiguration{EnableBFD: true})).NotTo(HaveOccurred())
-		Expect(infra.LeafKind2Config.UpdateConfig(nodes, infra.LeafKindConfiguration{EnableBFD: true})).NotTo(HaveOccurred())
+		Expect(infra.PeerLeaf1Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{EnableBFD: true})).NotTo(HaveOccurred())
+		Expect(infra.PeerLeaf2Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{EnableBFD: true})).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
@@ -711,8 +714,8 @@ var _ = Describe("Underlay BFD Configuration", Ordered, func() {
 			}, 2*time.Minute, time.Second).Should(BeFalse())
 		}
 
-		Expect(infra.LeafKind1Config.UpdateConfig(nodes, infra.LeafKindConfiguration{})).NotTo(HaveOccurred())
-		Expect(infra.LeafKind2Config.UpdateConfig(nodes, infra.LeafKindConfiguration{})).NotTo(HaveOccurred())
+		Expect(infra.PeerLeaf1Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{})).NotTo(HaveOccurred())
+		Expect(infra.PeerLeaf2Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{})).NotTo(HaveOccurred())
 	})
 
 	DescribeTable("should establish BFD sessions with the ToR",
@@ -726,7 +729,7 @@ var _ = Describe("Underlay BFD Configuration", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("validating BFD sessions are established")
-			exec := executor.ForContainer(infra.KindLeaf)
+			exec := executor.ForContainer(infra.PeerLeaf1)
 			Eventually(func() error {
 				bfdPeers, err := frr.GetBFDPeers(exec)
 				if err != nil {
@@ -738,7 +741,7 @@ var _ = Describe("Underlay BFD Configuration", Ordered, func() {
 				}
 
 				for _, node := range nodes {
-					neighborIP, err := infra.NeighborIP(infra.KindLeaf, node.Name)
+					neighborIP, err := infra.NeighborIP(infra.PeerLeaf1, node.Name)
 					Expect(err).NotTo(HaveOccurred())
 
 					peer, ok := bfdPeers.Peers[neighborIP]
@@ -754,21 +757,21 @@ var _ = Describe("Underlay BFD Configuration", Ordered, func() {
 
 			By("validating BGP sessions are still established")
 			for _, node := range nodes {
-				neighborIP, err := infra.NeighborIP(infra.KindLeaf, node.Name)
+				neighborIP, err := infra.NeighborIP(infra.PeerLeaf1, node.Name)
 				Expect(err).NotTo(HaveOccurred())
-				validateSessionWithNeighbor(infra.KindLeaf, node.Name, exec, neighborIP, Established)
+				validateSessionWithNeighbor(infra.PeerLeaf1, node.Name, exec, neighborIP, Established)
 			}
 
 			if underlay.Spec.Neighbors[0].BFD != nil && underlay.Spec.Neighbors[0].BFD.TransmitInterval != nil {
 				By("validating BFD parameters are negotiated with the remote peer")
-				exec := executor.ForContainer(infra.KindLeaf)
+				exec := executor.ForContainer(infra.PeerLeaf1)
 				Eventually(func(g Gomega) {
 					bfdPeers, err := frr.GetBFDPeers(exec)
 					g.Expect(err).NotTo(HaveOccurred())
 
 					for _, node := range nodes {
 
-						nodeIP, err := infra.NeighborIP(infra.KindLeaf, node.Name)
+						nodeIP, err := infra.NeighborIP(infra.PeerLeaf1, node.Name)
 						Expect(err).NotTo(HaveOccurred())
 
 						peer, ok := bfdPeers.Peers[nodeIP]
@@ -850,6 +853,7 @@ var _ = Describe("Add extra neighbor", Ordered, func() {
 		err := Updater.CleanAll()
 		Expect(err).NotTo(HaveOccurred())
 		cs = k8sclient.New()
+		waitForNICRecovery(cs)
 		nodesItems, err := cs.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		nodes = nodesItems.Items
@@ -898,15 +902,15 @@ var _ = Describe("Add extra neighbor", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for BGP session with first neighbor to establish")
-		exec := executor.ForContainer(infra.KindLeaf)
+		exec := executor.ForContainer(infra.PeerLeaf1)
 
 		Eventually(func() error {
 			for _, node := range nodes {
-				neighborIP, err := infra.NeighborIP(infra.KindLeaf, node.Name)
+				neighborIP, err := infra.NeighborIP(infra.PeerLeaf1, node.Name)
 				if err != nil {
 					continue
 				}
-				validateSessionWithNeighbor(infra.KindLeaf, node.Name, exec, neighborIP, Established)
+				validateSessionWithNeighbor(infra.PeerLeaf1, node.Name, exec, neighborIP, Established)
 			}
 			return nil
 		}, 2*time.Minute, time.Second).ShouldNot(HaveOccurred())
@@ -928,14 +932,14 @@ var _ = Describe("Add extra neighbor", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for BGP session with second neighbor to establish")
-		exec2 := executor.ForContainer(infra.KindLeaf2)
+		exec2 := executor.ForContainer(infra.PeerLeaf2)
 		Eventually(func() error {
 			for _, node := range nodes {
-				neighborIP, err := infra.NeighborIP(infra.KindLeaf2, node.Name)
+				neighborIP, err := infra.NeighborIP(infra.PeerLeaf2, node.Name)
 				if err != nil {
 					continue
 				}
-				validateSessionWithNeighbor(infra.KindLeaf2, node.Name, exec2, neighborIP, Established)
+				validateSessionWithNeighbor(infra.PeerLeaf2, node.Name, exec2, neighborIP, Established)
 			}
 			return nil
 		}, 2*time.Minute, time.Second).ShouldNot(HaveOccurred())

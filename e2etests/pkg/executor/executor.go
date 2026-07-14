@@ -3,12 +3,15 @@
 package executor
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
+	clientset "k8s.io/client-go/kubernetes"
 )
 
 var Kubectl string
@@ -126,6 +129,57 @@ func (p *podNetnsExecutor) Exec(cmd string, args ...string) (string, error) {
 	if err != nil {
 		return string(out), fmt.Errorf("exec nsenter in pod %s/%s container %s netns %s failed: %w. Output: %s",
 			p.namespace, p.name, p.container, p.netnsPath, err, string(out))
+	}
+	return string(out), nil
+}
+
+var (
+	forNodeClient    clientset.Interface
+	forNodeNamespace string
+	forNodeLabel     string
+)
+
+func InitForNode(cs clientset.Interface, namespace, label string) {
+	forNodeClient = cs
+	forNodeNamespace = namespace
+	forNodeLabel = label
+}
+
+func ForNode(nodeName string) (Executor, error) {
+	if forNodeClient == nil {
+		return nil, errors.New("ForNode called before InitForNode")
+	}
+	pods, err := forNodeClient.CoreV1().Pods(forNodeNamespace).List(
+		context.Background(),
+		metav1.ListOptions{LabelSelector: forNodeLabel},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list helper pods: %w", err)
+	}
+	for i := range pods.Items {
+		if pods.Items[i].Spec.NodeName == nodeName {
+			return &nodeExecutor{namespace: forNodeNamespace, podName: pods.Items[i].Name}, nil
+		}
+	}
+	return nil, fmt.Errorf("no node-exec-helper pod found on node %s", nodeName)
+}
+
+type nodeExecutor struct {
+	namespace string
+	podName   string
+}
+
+func (e *nodeExecutor) Exec(cmd string, args ...string) (string, error) {
+	if Kubectl == "" {
+		return "", errors.New("the kubectl parameter is not set")
+	}
+	nsenterArgs := []string{"exec", e.podName, "-n", e.namespace, "-c", "nsenter", "--",
+		"nsenter", "-t", "1", "-m", "-u", "-i", "-n", cmd}
+	fullargs := append(nsenterArgs, args...)
+	out, err := exec.Command(Kubectl, fullargs...).CombinedOutput()
+	if err != nil {
+		return string(out), fmt.Errorf("exec on node via pod %s/%s failed: %w. Output: %s",
+			e.namespace, e.podName, err, string(out))
 	}
 	return string(out), nil
 }

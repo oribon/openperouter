@@ -27,24 +27,26 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-var singleSessionUnderlay = v1alpha1.Underlay{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "underlay-single",
-		Namespace: openperouter.Namespace,
-	},
-	Spec: v1alpha1.UnderlaySpec{
-		ASN:  64514,
-		Nics: []string{"toswitch1"},
-		Neighbors: []v1alpha1.Neighbor{
-			{
-				ASN:     ptr.To(int64(64512)),
-				Address: new("192.168.11.2"),
+func singleSessionUnderlay() v1alpha1.Underlay {
+	return v1alpha1.Underlay{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "underlay-single",
+			Namespace: openperouter.Namespace,
+		},
+		Spec: v1alpha1.UnderlaySpec{
+			ASN:  64514,
+			Nics: []string{infra.SingleSessionUnderlayNic},
+			Neighbors: []v1alpha1.Neighbor{
+				{
+					ASN:     &infra.SingleSessionNeighborASN,
+					Address: &infra.SingleSessionNeighborIP,
+				},
+			},
+			EVPN: &v1alpha1.EVPNConfig{
+				VTEPCIDR: ptr.To("100.65.0.0/24"),
 			},
 		},
-		EVPN: &v1alpha1.EVPNConfig{
-			VTEPCIDR: ptr.To("100.65.0.0/24"),
-		},
-	},
+	}
 }
 
 var vniRedSingleSession = v1alpha1.L3VNI{
@@ -96,6 +98,7 @@ var _ = Describe("Single Session Baseline", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		cs = k8sclient.New()
+		waitForNICRecovery(cs)
 		nodesItems, err := cs.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		nodes = nodesItems.Items
@@ -103,7 +106,7 @@ var _ = Describe("Single Session Baseline", Ordered, func() {
 		By("Setting up underlay with single interface and single neighbor")
 		err = Updater.Update(config.Resources{
 			Underlays: []v1alpha1.Underlay{
-				singleSessionUnderlay,
+				singleSessionUnderlay(),
 			},
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -186,12 +189,12 @@ var _ = Describe("Single Session Baseline", Ordered, func() {
 
 	It("verifies L2 and L3 connectivity", func() {
 		By("Verifying BGP session with TOR")
-		exec := executor.ForContainer(infra.KindLeaf)
+		exec := executor.ForContainer(infra.PeerLeaf1)
 		Eventually(func() error {
 			for _, node := range nodes {
-				neighborIP, err := infra.NeighborIP(infra.KindLeaf, node.Name)
+				neighborIP, err := infra.NeighborIP(infra.PeerLeaf1, node.Name)
 				Expect(err).NotTo(HaveOccurred())
-				validateSessionWithNeighbor(infra.KindLeaf, node.Name, exec, neighborIP, Established)
+				validateSessionWithNeighbor(infra.PeerLeaf1, node.Name, exec, neighborIP, Established)
 			}
 			return nil
 		}, time.Minute, time.Second).ShouldNot(HaveOccurred())

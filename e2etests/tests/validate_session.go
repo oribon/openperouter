@@ -12,8 +12,10 @@ import (
 	"github.com/openperouter/openperouter/api/v1alpha1"
 	"github.com/openperouter/openperouter/e2etests/pkg/executor"
 	"github.com/openperouter/openperouter/e2etests/pkg/frr"
+	"github.com/openperouter/openperouter/e2etests/pkg/k8s"
 	"github.com/openperouter/openperouter/e2etests/pkg/openperouter"
 	corev1 "k8s.io/api/core/v1"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/utils/ptr"
 )
 
@@ -70,6 +72,34 @@ func waitForType5Route(exec executor.Executor, prefix string) {
 		}
 		return nil
 	}, 2*time.Minute, time.Second).ShouldNot(HaveOccurred())
+}
+
+// waitForNICRecovery waits until the underlay NICs are back in the host
+// network namespace on all cluster nodes. After CleanAll deletes the
+// underlay, the recovery monitor moves NICs from perouter to host. This
+// takes time (especially on non-kind platforms). Calling this before
+// creating a new underlay ensures the controller can properly move NICs
+// and preserve their IPs.
+func waitForNICRecovery(cs clientset.Interface) {
+	GinkgoHelper()
+	nodes, err := k8s.GetNodes(cs)
+	Expect(err).NotTo(HaveOccurred())
+
+	Eventually(func() error {
+		for _, node := range nodes {
+			exec, err := executor.ForNode(node.Name)
+			if err != nil {
+				return fmt.Errorf("node %s: %w", node.Name, err)
+			}
+			for _, nic := range []string{"toswitch1", "toswitch2"} {
+				_, err = exec.Exec("ip", "link", "show", nic)
+				if err != nil {
+					return fmt.Errorf("node %s: %s not in host netns yet", node.Name, nic)
+				}
+			}
+		}
+		return nil
+	}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).Should(Succeed())
 }
 
 // validateSessionDownForNeigh validates that the neighbor is down

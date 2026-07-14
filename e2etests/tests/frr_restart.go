@@ -61,6 +61,7 @@ var _ = Describe("North/south traffic after FRR container restart", Ordered, fun
 		Expect(err).NotTo(HaveOccurred())
 
 		cs = k8sclient.New()
+		waitForNICRecovery(cs)
 		Eventually(func() error {
 			routers, err = openperouter.Get(cs, HostMode)
 			if err != nil {
@@ -189,12 +190,12 @@ var _ = Describe("North/south traffic after FRR container restart", Ordered, fun
 
 		By("waiting for BGP sessions to re-establish")
 		nodeName := routerPod.Spec.NodeName
-		neighborIP, err := infra.NeighborIP(infra.KindLeaf, nodeName)
+		neighborIP, err := infra.NeighborIP(infra.PeerLeaf1, nodeName)
 		Expect(err).NotTo(HaveOccurred())
 		validateSessionWithNeighbor(
-			infra.KindLeaf,
+			infra.PeerLeaf1,
 			nodeName,
-			executor.ForContainer(infra.KindLeaf),
+			executor.ForContainer(infra.PeerLeaf1),
 			neighborIP,
 			Established,
 		)

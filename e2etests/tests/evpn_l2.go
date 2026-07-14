@@ -67,6 +67,7 @@ var _ = Describe("Routes between bgp and the fabric with Underlay in ipv4", Orde
 		Expect(err).NotTo(HaveOccurred())
 
 		cs = k8sclient.New()
+		waitForNICRecovery(cs)
 		routers, err = openperouter.Get(cs, HostMode)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -79,12 +80,13 @@ var _ = Describe("Routes between bgp and the fabric with Underlay in ipv4", Orde
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		// Create pre-existing OVS bridges on Kind nodes for testing
-		nodes := []string{infra.KindControlPlane, infra.KindWorker}
-		for _, nodeName := range nodes {
-			exec := executor.ForContainer(nodeName)
-			// Create OVS bridge (ignore error if bridge already exists)
-			_, err = exec.Exec("ovs-vsctl", "add-br", preExistingOVSBridge)
+		// Create pre-existing OVS bridges on cluster nodes for testing
+		ovsNodes, err := k8s.GetNodes(cs)
+		Expect(err).NotTo(HaveOccurred())
+		for _, node := range ovsNodes {
+			exec, err := executor.ForNode(node.Name)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = exec.Exec("ovs-vsctl", "--may-exist", "add-br", preExistingOVSBridge)
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})
@@ -102,9 +104,11 @@ var _ = Describe("Routes between bgp and the fabric with Underlay in ipv4", Orde
 		}, 2*time.Minute, time.Second).ShouldNot(HaveOccurred())
 
 		// Clean up pre-existing OVS bridges
-		nodes := []string{infra.KindControlPlane, infra.KindWorker}
-		for _, nodeName := range nodes {
-			exec := executor.ForContainer(nodeName)
+		ovsNodes, err := k8s.GetNodes(cs)
+		Expect(err).NotTo(HaveOccurred())
+		for _, node := range ovsNodes {
+			exec, err := executor.ForNode(node.Name)
+			Expect(err).NotTo(HaveOccurred())
 			_, err = exec.Exec("ovs-vsctl", "--if-exists", "del-br", preExistingOVSBridge)
 			Expect(err).NotTo(HaveOccurred())
 		}
@@ -174,17 +178,32 @@ var _ = Describe("Routes between bgp and the fabric with Underlay in ipv4", Orde
 		Expect(removeGatewayFromPod(secondPod)).To(Succeed())
 
 		By("waiting for BGP sessions to establish on both nodes before traffic check")
-		leafExec := executor.ForContainer(infra.KindLeaf)
+		leafExec := executor.ForContainer(infra.PeerLeaf1)
 		for _, node := range nodes {
-			neighborIP, err := infra.NeighborIP(infra.KindLeaf, node.Name)
+			neighborIP, err := infra.NeighborIP(infra.PeerLeaf1, node.Name)
 			Expect(err).NotTo(HaveOccurred())
 			validateSessionWithNeighbor(
-				infra.KindLeaf,
+				infra.PeerLeaf1,
 				node.Name,
 				leafExec,
 				neighborIP,
 				Established,
 			)
+		}
+
+		By("waiting for Type-5 routes to propagate through fabric before traffic check")
+		waitForType5Route(leafExec, "192.171.24.0/24")
+		waitForType5Route(leafExec, "192.168.20.0/24")
+
+		By("waiting for VXLAN tunnels to establish on test nodes")
+		for _, node := range nodes[:2] {
+			nodeExec, err := executor.ForNode(node.Name)
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(func(g Gomega) {
+				out, err := nodeExec.Exec("ip", "netns", "exec", "perouter", "bridge", "fdb", "show", "dev", "vni110")
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(out).To(ContainSubstring("dst"))
+			}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).Should(Succeed())
 		}
 
 		podExecutor := executor.ForPod(firstPod.Namespace, firstPod.Name, "agnhost")

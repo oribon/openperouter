@@ -181,12 +181,12 @@ var _ = Describe("Alpha: Named netns and kernel objects survive FRR crash", Orde
 			)
 
 		By("waiting for BGP sessions to re-establish")
-		neighborIP, err := infra.NeighborIP(infra.KindLeaf, nodeName)
+		neighborIP, err := infra.NeighborIP(infra.PeerLeaf1, nodeName)
 		Expect(err).NotTo(HaveOccurred())
 		validateSessionWithNeighbor(
-			infra.KindLeaf,
+			infra.PeerLeaf1,
 			nodeName,
-			executor.ForContainer(infra.KindLeaf),
+			executor.ForContainer(infra.PeerLeaf1),
 			neighborIP,
 			Established,
 		)
@@ -286,11 +286,11 @@ var _ = Describe("Beta: Named netns auto-rebuilds after deletion", Ordered, func
 		nodes, err := k8s.GetNodes(cs)
 		Expect(err).NotTo(HaveOccurred())
 
-		err = infra.LeafKind1Config.UpdateConfig(
+		err = infra.PeerLeaf1Config.UpdateConfig(
 			nodes,
-			infra.LeafKindConfiguration{
-				ASN:              infra.LeafKind1Config.ASN,
-				SpinePeerAddress: infra.LeafKind1Config.SpinePeerAddress,
+			infra.PeerLeafConfiguration{
+				ASN:              infra.PeerLeaf1Config.ASN,
+				SpinePeerAddress: infra.PeerLeaf1Config.SpinePeerAddress,
 				PERouterASN:      64514,
 				NextHopSelf:      true,
 			},
@@ -299,12 +299,12 @@ var _ = Describe("Beta: Named netns auto-rebuilds after deletion", Ordered, func
 		Expect(err).NotTo(HaveOccurred())
 
 		By("waiting for BGP sessions to establish after underlay creation")
-		leafExec := executor.ForContainer(infra.KindLeaf)
+		leafExec := executor.ForContainer(infra.PeerLeaf1)
 		for _, node := range nodes {
-			neighborIP, err := infra.NeighborIP(infra.KindLeaf, node.Name)
+			neighborIP, err := infra.NeighborIP(infra.PeerLeaf1, node.Name)
 			Expect(err).NotTo(HaveOccurred())
 			validateSessionWithNeighbor(
-				infra.KindLeaf,
+				infra.PeerLeaf1,
 				node.Name,
 				leafExec,
 				neighborIP,
@@ -321,8 +321,8 @@ var _ = Describe("Beta: Named netns auto-rebuilds after deletion", Ordered, func
 		By("resetting leafkind config to defaults")
 		nodes, err := k8s.GetNodes(cs)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(infra.LeafKind1Config.UpdateConfig(nodes, infra.LeafKindConfiguration{})).To(Succeed())
-		Expect(infra.LeafKind2Config.UpdateConfig(nodes, infra.LeafKindConfiguration{})).To(Succeed())
+		Expect(infra.PeerLeaf1Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{})).To(Succeed())
+		Expect(infra.PeerLeaf2Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{})).To(Succeed())
 
 		err = Updater.CleanAll()
 		Expect(err).NotTo(HaveOccurred())
@@ -393,18 +393,18 @@ var _ = Describe("Beta: Named netns auto-rebuilds after deletion", Ordered, func
 		urlStr := url.Format("http://%s/clientip", hostPort)
 
 		By("waiting for BGP sessions to establish before traffic check")
-		neighborIP, err := infra.NeighborIP(infra.KindLeaf, nodes[0].Name)
+		neighborIP, err := infra.NeighborIP(infra.PeerLeaf1, nodes[0].Name)
 		Expect(err).NotTo(HaveOccurred())
 		validateSessionWithNeighbor(
-			infra.KindLeaf,
+			infra.PeerLeaf1,
 			nodes[0].Name,
-			executor.ForContainer(infra.KindLeaf),
+			executor.ForContainer(infra.PeerLeaf1),
 			neighborIP,
 			Established,
 		)
 
 		By("waiting for Type-5 prefix route to appear on the fabric before traffic check")
-		waitForType5Route(executor.ForContainer(infra.KindLeaf), "192.171.24.0/24")
+		waitForType5Route(executor.ForContainer(infra.PeerLeaf1), "192.171.24.0/24")
 
 		By("verifying traffic works before netns deletion")
 		Eventually(func() error {
@@ -464,18 +464,18 @@ var _ = Describe("Beta: Named netns auto-rebuilds after deletion", Ordered, func
 		}).WithTimeout(3 * time.Minute).WithPolling(2 * time.Second).Should(Succeed())
 
 		By("waiting for BGP sessions to re-establish")
-		neighborIP, err = infra.NeighborIP(infra.KindLeaf, nodeName)
+		neighborIP, err = infra.NeighborIP(infra.PeerLeaf1, nodeName)
 		Expect(err).NotTo(HaveOccurred())
 		validateSessionWithNeighbor(
-			infra.KindLeaf,
+			infra.PeerLeaf1,
 			nodeName,
-			executor.ForContainer(infra.KindLeaf),
+			executor.ForContainer(infra.PeerLeaf1),
 			neighborIP,
 			Established,
 		)
 
 		By("waiting for Type-5 prefix route to appear on the fabric")
-		waitForType5Route(executor.ForContainer(infra.KindLeaf), "192.171.24.0/24")
+		waitForType5Route(executor.ForContainer(infra.PeerLeaf1), "192.171.24.0/24")
 
 		By("capturing pre-traffic diagnostic snapshot (rebuilt PE + leafkind state)")
 		dumpPreTrafficState(cs, nodeName)
@@ -546,7 +546,7 @@ var _ = Describe("Beta: Named netns auto-rebuilds after deletion", Ordered, func
 			if !ginkgo.CurrentSpecReport().Failed() {
 				return
 			}
-			leafExec := executor.ForContainer(infra.KindLeaf)
+			leafExec := executor.ForContainer(infra.PeerLeaf1)
 			out, err := leafExec.Exec("vtysh", "-c", "show bgp l2vpn evpn route type macip")
 			if err != nil {
 				ginkgo.GinkgoWriter.Printf("failed to dump leafkind Type-2 routes: %v\n", err)
@@ -564,12 +564,12 @@ var _ = Describe("Beta: Named netns auto-rebuilds after deletion", Ordered, func
 		dumpUnderlayVeths(cs, "stretched-L2 before traffic check")
 
 		By("waiting for BGP sessions to establish on both nodes before traffic check")
-		leafExec := executor.ForContainer(infra.KindLeaf)
+		leafExec := executor.ForContainer(infra.PeerLeaf1)
 		for _, node := range nodes {
-			neighborIP, err := infra.NeighborIP(infra.KindLeaf, node.Name)
+			neighborIP, err := infra.NeighborIP(infra.PeerLeaf1, node.Name)
 			Expect(err).NotTo(HaveOccurred())
 			validateSessionWithNeighbor(
-				infra.KindLeaf,
+				infra.PeerLeaf1,
 				node.Name,
 				leafExec,
 				neighborIP,
@@ -608,12 +608,12 @@ var _ = Describe("Beta: Named netns auto-rebuilds after deletion", Ordered, func
 		}).WithTimeout(3 * time.Minute).WithPolling(2 * time.Second).Should(Succeed())
 
 		By("waiting for BGP sessions to re-establish")
-		neighborIP, err := infra.NeighborIP(infra.KindLeaf, nodeName)
+		neighborIP, err := infra.NeighborIP(infra.PeerLeaf1, nodeName)
 		Expect(err).NotTo(HaveOccurred())
 		validateSessionWithNeighbor(
-			infra.KindLeaf,
+			infra.PeerLeaf1,
 			nodeName,
-			executor.ForContainer(infra.KindLeaf),
+			executor.ForContainer(infra.PeerLeaf1),
 			neighborIP,
 			Established,
 		)
@@ -694,7 +694,11 @@ func dumpUnderlayVeths(cs clientset.Interface, label string) {
 	}
 
 	for _, node := range nodes {
-		nodeExec := executor.ForContainer(node.Name)
+		nodeExec, err := executor.ForNode(node.Name)
+		if err != nil {
+			w.Printf("DIAG [%s]: failed to get executor for node %s: %v\n", label, node.Name, err)
+			continue
+		}
 
 		for _, iface := range []string{"toswitch1", "toswitch2"} {
 			for _, loc := range []struct {
@@ -749,9 +753,9 @@ func dumpPreTrafficState(cs clientset.Interface, nodeName string) {
 		{"rebuilt PE Type-5 routes", peExec, []string{"vtysh", "-c", "show bgp l2vpn evpn route type prefix"}},
 		{"rebuilt PE Type-2 routes", peExec, []string{"vtysh", "-c", "show bgp l2vpn evpn route type macip"}},
 		{"rebuilt PE ip neigh", peExec, []string{"bash", "-c", "ip neigh"}},
-		{"leafkind Type-5 routes", executor.ForContainer(infra.KindLeaf), []string{"vtysh", "-c", "show bgp l2vpn evpn route type prefix"}},
-		{"leafkind Type-2 routes", executor.ForContainer(infra.KindLeaf), []string{"vtysh", "-c", "show bgp l2vpn evpn route type macip"}},
-		{"leafkind BGP neighbors", executor.ForContainer(infra.KindLeaf), []string{"vtysh", "-c", "show bgp neighbors"}},
+		{"leafkind Type-5 routes", executor.ForContainer(infra.PeerLeaf1), []string{"vtysh", "-c", "show bgp l2vpn evpn route type prefix"}},
+		{"leafkind Type-2 routes", executor.ForContainer(infra.PeerLeaf1), []string{"vtysh", "-c", "show bgp l2vpn evpn route type macip"}},
+		{"leafkind BGP neighbors", executor.ForContainer(infra.PeerLeaf1), []string{"vtysh", "-c", "show bgp neighbors"}},
 		{"rebuilt PE bridge fdb (vni110)", peExec, []string{"bash", "-c", "bridge fdb show dev vni110"}},
 		{"rebuilt PE bridge fdb (br-pe-110)", peExec, []string{"bash", "-c", "bridge fdb show dev br-pe-110"}},
 	} {

@@ -31,6 +31,8 @@ var _ = Describe("RawFRRConfig", Ordered, func() {
 		err := Updater.CleanAll()
 		Expect(err).NotTo(HaveOccurred())
 
+		waitForNICRecovery(cs)
+
 		By("waiting for all router pods to be ready after cleanup")
 		Eventually(func() error {
 			routers, err = openperouter.Get(cs, HostMode)
@@ -48,12 +50,12 @@ var _ = Describe("RawFRRConfig", Ordered, func() {
 		By("waiting for BGP sessions to establish after underlay creation")
 		nodes, err := k8s.GetNodes(cs)
 		Expect(err).NotTo(HaveOccurred())
-		leafExec := executor.ForContainer(infra.KindLeaf)
+		leafExec := executor.ForContainer(infra.PeerLeaf1)
 		for _, node := range nodes {
-			neighborIP, err := infra.NeighborIP(infra.KindLeaf, node.Name)
+			neighborIP, err := infra.NeighborIP(infra.PeerLeaf1, node.Name)
 			Expect(err).NotTo(HaveOccurred())
 			validateSessionWithNeighbor(
-				infra.KindLeaf,
+				infra.PeerLeaf1,
 				node.Name,
 				leafExec,
 				neighborIP,
@@ -167,7 +169,7 @@ var _ = Describe("RawFRRConfig", Ordered, func() {
 					return err
 				}
 				hasConfig := strings.Contains(runningConfig, expected)
-				isTarget := strings.Contains(router.Name(), targetNode.Name)
+				isTarget := router.NodeName() == targetNode.Name
 
 				if isTarget && !hasConfig {
 					return fmt.Errorf("target router %s running config does not contain %q", router.Name(), expected)

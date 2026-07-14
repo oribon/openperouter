@@ -31,7 +31,7 @@ func dumpIfFails(cs clientset.Interface, additionalNamespaces ...string) {
 	additionalNamespaces = slices.Compact(additionalNamespaces)
 
 	if ginkgo.CurrentSpecReport().Failed() {
-		dumpFRRInfo(ReportPath, ginkgo.CurrentSpecReport().FullText(), cs, infra.LeafA, infra.LeafB, infra.KindLeaf)
+		dumpFRRInfo(ReportPath, ginkgo.CurrentSpecReport().FullText(), cs, infra.LeafA, infra.LeafB, infra.PeerLeaf1)
 		for _, namespace := range additionalNamespaces {
 			dumpWorkloadInfo(ReportPath, ginkgo.CurrentSpecReport().FullText(), cs, namespace)
 		}

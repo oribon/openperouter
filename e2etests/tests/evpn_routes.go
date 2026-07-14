@@ -88,6 +88,7 @@ var _ = Describe("Routes between bgp and the fabric with Underlay in ipv4", Orde
 		Expect(err).NotTo(HaveOccurred())
 
 		cs = k8sclient.New()
+		waitForNICRecovery(cs)
 		Eventually(func() error {
 			routers, err = openperouter.Get(cs, HostMode)
 			if err != nil {
@@ -479,10 +480,10 @@ var _ = Describe("Routes between bgp and the fabric with iBGP testing e2e integr
 		nodes, err = k8s.GetNodes(cs)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(
-			infra.LeafKind1Config.UpdateConfig(nodes, infra.LeafKindConfiguration{NextHopSelf: true, PERouterASN: 64512}),
+			infra.PeerLeaf1Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{NextHopSelf: true, PERouterASN: 64512}),
 		).To(Succeed())
 		Expect(
-			infra.LeafKind2Config.UpdateConfig(nodes, infra.LeafKindConfiguration{NextHopSelf: true, PERouterASN: 64512}),
+			infra.PeerLeaf2Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{NextHopSelf: true, PERouterASN: 64512}),
 		).To(Succeed())
 
 		err = Updater.Update(config.Resources{
@@ -540,8 +541,8 @@ var _ = Describe("Routes between bgp and the fabric with iBGP testing e2e integr
 		Expect(infra.LeafAConfig.Reset()).To(Succeed())
 		Expect(infra.LeafBConfig.Reset()).To(Succeed())
 
-		Expect(infra.LeafKind1Config.UpdateConfig(nodes, infra.LeafKindConfiguration{})).To(Succeed())
-		Expect(infra.LeafKind2Config.UpdateConfig(nodes, infra.LeafKindConfiguration{})).To(Succeed())
+		Expect(infra.PeerLeaf1Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{})).To(Succeed())
+		Expect(infra.PeerLeaf2Config.UpdateConfig(nodes, infra.PeerLeafConfiguration{})).To(Succeed())
 
 		err = Updater.CleanAll()
 		Expect(err).NotTo(HaveOccurred())
