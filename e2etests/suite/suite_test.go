@@ -75,6 +75,8 @@ var _ = ginkgo.BeforeSuite(func() {
 	tests.K8sReporter = reporter
 
 	cs := k8sclient.New()
+	err = executor.SetupNodeExec(cs, openperouter.Namespace)
+	Expect(err).NotTo(HaveOccurred(), "failed to setup node-exec-helper")
 
 	ginkgo.By("Registering fabric and node links from " + nodeLinkConfigPath)
 	err = infra.RegisterLinks(nodeLinkConfigPath)
@@ -87,6 +89,8 @@ var _ = ginkgo.BeforeSuite(func() {
 })
 
 var _ = ginkgo.AfterSuite(func() {
+	Expect(executor.TeardownNodeExec()).NotTo(HaveOccurred())
+
 	if updater == nil {
 		return
 	}

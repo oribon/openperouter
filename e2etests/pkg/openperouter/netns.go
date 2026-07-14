@@ -14,7 +14,10 @@ const NamedNetns = "perouter"
 
 // NamedNetnsExists checks whether /var/run/netns/perouter is present on nodeName.
 func NamedNetnsExists(nodeName string) (bool, error) {
-	exec := executor.ForContainer(nodeName)
+	exec, err := executor.ForNode(nodeName)
+	if err != nil {
+		return false, err
+	}
 	out, err := exec.Exec("ip", "netns", "list")
 	if err != nil {
 		return false, err
@@ -33,7 +36,10 @@ func NamedNetnsExists(nodeName string) (bool, error) {
 // NamedNetnsHasInterfaceType checks whether the named netns contains at least one
 // interface of the given link type (e.g. "vrf", "bridge", "vxlan").
 func NamedNetnsHasInterfaceType(nodeName, linkType string) (bool, error) {
-	exec := executor.ForContainer(nodeName)
+	exec, err := executor.ForNode(nodeName)
+	if err != nil {
+		return false, err
+	}
 	out, err := exec.Exec("ip", "netns", "exec", NamedNetns, "ip", "link", "show", "type", linkType)
 	if err != nil {
 		return false, err
@@ -45,13 +51,16 @@ func NamedNetnsHasInterfaceType(nodeName, linkType string) (bool, error) {
 // netns, then runs "ip netns delete perouter" on nodeName. Pre-deleting
 // devices accelerates the kernel's async cleanup_net() from ~28s to <2s.
 func DeleteNamedNetns(nodeName string) error {
-	e := executor.ForContainer(nodeName)
+	e, err := executor.ForNode(nodeName)
+	if err != nil {
+		return err
+	}
 
 	if err := deleteNetnsDevices(e); err != nil {
 		log.Printf("pre-deletion of devices failed for %q, proceeding with netns delete: %v", nodeName, err)
 	}
 
-	_, err := e.Exec("ip", "netns", "delete", NamedNetns)
+	_, err = e.Exec("ip", "netns", "delete", NamedNetns)
 	return err
 }
 
@@ -60,7 +69,10 @@ func DeleteNamedNetns(nodeName string) error {
 // the default loopback interfaces on the VTEP loopback (lo), and by checking
 // that `lo` is up.
 func UnderlayConfigured(nodeName string) (bool, error) {
-	exec := executor.ForContainer(nodeName)
+	exec, err := executor.ForNode(nodeName)
+	if err != nil {
+		return false, err
+	}
 
 	out, err := exec.Exec("ip", "netns", "list")
 	if err != nil {
@@ -92,7 +104,10 @@ func UnderlayConfigured(nodeName string) (bool, error) {
 // UnderlayVethExists checks whether the toswitch interfaces exist on nodeName,
 // either in the default netns or inside the perouter netns.
 func UnderlayVethsExists(nodeName string) bool {
-	exec := executor.ForContainer(nodeName)
+	exec, err := executor.ForNode(nodeName)
+	if err != nil {
+		return false
+	}
 	for _, iface := range []string{"toswitch1", "toswitch2"} {
 		if _, err := exec.Exec("ip", "link", "show", iface); err == nil {
 			return true
@@ -132,7 +147,6 @@ func deleteNetnsDevices(e executor.Executor) error {
 }
 
 func ifaceName(line string) (string, error) {
-	// ip -o link show format: "N: name[@suffix]: <flags> ..."
 	parts := strings.SplitN(line, ": ", 3)
 	if len(parts) < 2 {
 		return "", fmt.Errorf("unexpected line from 'ip -o link show': %q", line)
