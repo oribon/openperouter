@@ -8,6 +8,7 @@ import (
 
 	frrk8sv1beta1 "github.com/metallb/frr-k8s/api/v1beta1"
 	"github.com/openperouter/openperouter/api/v1alpha1"
+	"github.com/openperouter/openperouter/e2etests/pkg/frrk8s"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -105,7 +106,9 @@ func (o Updater) Update(r Resources) error {
 
 	// Iterating over the map will return the items in a random order.
 	for i, obj := range objects {
-		obj.SetNamespace(o.namespace)
+		if obj.GetNamespace() == "" {
+			obj.SetNamespace(o.namespace)
+		}
 		_, err := controllerutil.CreateOrUpdate(context.Background(), o.cli, obj, func() error {
 			// the mutate function is expected to change the object when updating.
 			// we always override with the old version, and we change only the spec part.
@@ -182,7 +185,7 @@ func (o Updater) CleanButUnderlay() error {
 		return err
 	}
 	if err := o.cli.DeleteAllOf(context.Background(), &frrk8sv1beta1.FRRConfiguration{},
-		client.InNamespace(o.namespace)); err != nil {
+		client.InNamespace(frrk8s.Namespace)); err != nil {
 		return err
 	}
 	return nil
