@@ -90,7 +90,8 @@ var _ = Describe("Systemd Router Restart Resiliency", Label("systemdmode"), Orde
 
 	restartRouterOnNode := func(node corev1.Node) {
 		By("restarting FRR container via systemd on node " + node.Name)
-		nodeExec := executor.ForContainer(node.Name)
+		nodeExec, err := executor.ForNode(node.Name)
+		Expect(err).NotTo(HaveOccurred())
 
 		pidBefore, err := nodeExec.Exec("systemctl", "show", "--property=MainPID", "--value", "routerpod-pod.service")
 		Expect(err).NotTo(HaveOccurred())
@@ -203,7 +204,8 @@ var _ = Describe("Systemd: Named netns and kernel objects survive FRR container 
 	It("should preserve named netns and kernel objects when FRR container is killed", func() {
 		Expect(nodes).NotTo(BeEmpty())
 		nodeName := nodes[0].Name
-		nodeExec := executor.ForContainer(nodeName)
+		nodeExec, err := executor.ForNode(nodeName)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("verifying named netns exists before crash")
 		Expect(openperouter.NamedNetnsExists(nodeName)).To(BeTrue())
@@ -214,7 +216,7 @@ var _ = Describe("Systemd: Named netns and kernel objects survive FRR container 
 		}
 
 		By("killing FRR container via podman")
-		_, err := nodeExec.Exec("podman", "kill", "frr")
+		_, err = nodeExec.Exec("podman", "kill", "frr")
 		Expect(err).NotTo(HaveOccurred())
 
 		By("immediately asserting named netns and kernel objects survived")
@@ -322,7 +324,8 @@ var _ = Describe("Systemd: Controller auto-recovers when operator deletes named 
 		}
 
 		By("waiting for routerpod service to become active")
-		nodeExec := executor.ForContainer(nodeName)
+		nodeExec, err := executor.ForNode(nodeName)
+		Expect(err).NotTo(HaveOccurred())
 		Eventually(func() error {
 			output, err := nodeExec.Exec("systemctl", "is-active", "routerpod-pod.service")
 			if err != nil {
@@ -455,7 +458,8 @@ var _ = Describe("Systemd: Data plane continuity during FRR restart", Label("sys
 		stopAndCount := measureTrafficLoss(clientExec, urlStr)
 
 		By("restarting routerpod on server's node")
-		serverNodeExec := executor.ForContainer(nodes[0].Name)
+		serverNodeExec, err := executor.ForNode(nodes[0].Name)
+		Expect(err).NotTo(HaveOccurred())
 		_, err = serverNodeExec.Exec("systemctl", "restart", "routerpod-pod.service")
 		Expect(err).NotTo(HaveOccurred())
 

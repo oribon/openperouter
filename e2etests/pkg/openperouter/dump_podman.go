@@ -20,7 +20,11 @@ func DumpPodmanLogs(nodes []corev1.Node) (string, error) {
 	for _, node := range nodes {
 		res.WriteString(fmt.Sprintf("####### Node: %s\n", node.Name))
 
-		exec := executor.ForContainer(node.Name)
+		exec, err := executor.ForNode(node.Name)
+		if err != nil {
+			allerrs = errors.Join(allerrs, fmt.Errorf("\nFailed to get executor for node %s: %v", node.Name, err))
+			continue
+		}
 
 		res.WriteString(fmt.Sprintf("### Podman pods on %s:\n", node.Name))
 		podList, err := exec.Exec("podman", "pod", "ps", "--format", "{{.Name}}")
