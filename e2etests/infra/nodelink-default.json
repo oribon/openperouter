@@ -1,0 +1,6 @@
+{
+  "nodes": {
+    "pe-kind-control-plane": {"ipForKindLeaf": "192.168.11.3", "ipForKindLeaf2": "192.168.12.3"},
+    "pe-kind-worker": {"ipForKindLeaf": "192.168.11.4", "ipForKindLeaf2": "192.168.12.4"}
+  }
+}
