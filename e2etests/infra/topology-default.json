@@ -1,0 +1,13 @@
+{
+  "nodes": {
+    "pe-kind-control-plane": {"peerLeafIP": "192.168.11.3", "peerLeaf2IP": "192.168.12.3"},
+    "pe-kind-worker": {"peerLeafIP": "192.168.11.4", "peerLeaf2IP": "192.168.12.4"}
+  },
+  "peerLeaf1IP": "192.168.11.2",
+  "peerLeaf2IP": "192.168.12.2",
+  "underlayNics": ["toswitch1", "toswitch2"],
+  "underlayNeighbors": [
+    {"asn": 64512, "address": "192.168.11.2"},
+    {"asn": 64513, "address": "192.168.12.2"}
+  ]
+}

@@ -9,21 +9,22 @@ import (
 	"github.com/openperouter/openperouter/e2etests/pkg/ipfamily"
 )
 
-const (
-	ClabPrefix = "clab-kind-"
-	KindLeaf   = ClabPrefix + "leafkind1"
-	KindLeaf2  = ClabPrefix + "leafkind2"
-	LeafA      = ClabPrefix + "leafA"
-	LeafB      = ClabPrefix + "leafB"
+var ClabPrefix = "clab-kind-"
+
+var (
+	PeerLeaf1 = ClabPrefix + "leafkind1"
+	PeerLeaf2 = ClabPrefix + "leafkind2"
+	LeafA     = ClabPrefix + "leafA"
+	LeafB     = ClabPrefix + "leafB"
 )
 
 var (
-	KindLeaf1Container = frr.Container{
-		Name:       KindLeaf,
+	PeerLeaf1Container = frr.Container{
+		Name:       PeerLeaf1,
 		ConfigPath: "leafkind1",
 	}
-	KindLeaf2Container = frr.Container{
-		Name:       KindLeaf2,
+	PeerLeaf2Container = frr.Container{
+		Name:       PeerLeaf2,
 		ConfigPath: "leafkind2",
 	}
 	LeafAContainer = frr.Container{
@@ -41,32 +42,31 @@ var linksForFamily map[ipfamily.Family]map[link]linkAddresses
 
 func init() {
 	linksForFamily = map[ipfamily.Family]map[link]linkAddresses{}
+	reinitFabricLinks()
+}
 
-	// leafkind1 links - bridge connections use toswitch1
-	addLinkIPs("clab-kind-leafkind1", "pe-kind-control-plane", "192.168.11.2", "192.168.11.3")
-	addLinkIPv6s("clab-kind-leafkind1", "pe-kind-control-plane", "2001:db8:11::2", "2001:db8:11::3")
-	addLinkInterfaces("clab-kind-leafkind1", "pe-kind-control-plane", "tokindctrlpl", "toleafkind1")
-	addLinkIPs("clab-kind-leafkind1", "pe-kind-worker", "192.168.11.2", "192.168.11.4")
-	addLinkIPv6s("clab-kind-leafkind1", "pe-kind-worker", "2001:db8:11::2", "2001:db8:11::4")
-	addLinkInterfaces("clab-kind-leafkind1", "pe-kind-worker", "tokindworker", "toleafkind1")
-	addLinkIPs("clab-kind-leafkind1", "clab-kind-spine", "192.168.1.5", "192.168.1.4")
+func reinitFabricLinks() {
+	spine := ClabPrefix + "spine"
 
-	// leafkind2 links - bridge connections use toswitch2
-	addLinkIPs("clab-kind-leafkind2", "pe-kind-control-plane", "192.168.12.2", "192.168.12.3")
-	addLinkIPv6s("clab-kind-leafkind2", "pe-kind-control-plane", "2001:db8:12::2", "2001:db8:12::3")
-	addLinkInterfaces("clab-kind-leafkind2", "pe-kind-control-plane", "tokindctrlpl", "toleafkind2")
-	addLinkIPs("clab-kind-leafkind2", "pe-kind-worker", "192.168.12.2", "192.168.12.4")
-	addLinkIPv6s("clab-kind-leafkind2", "pe-kind-worker", "2001:db8:12::2", "2001:db8:12::4")
-	addLinkInterfaces("clab-kind-leafkind2", "pe-kind-worker", "tokindworker", "toleafkind2")
-	addLinkIPs("clab-kind-leafkind2", "clab-kind-spine", "192.168.1.7", "192.168.1.6")
+	addLinkIPs(PeerLeaf1, spine, "192.168.1.5", "192.168.1.4")
+	addLinkIPs(PeerLeaf2, spine, "192.168.1.7", "192.168.1.6")
+	addLinkIPs(LeafA, spine, "192.168.1.1", "192.168.1.0")
+	addLinkIPs(LeafB, spine, "192.168.1.3", "192.168.1.2")
+	addLinkIPs(LeafA, ClabPrefix+"hostA_red", "192.168.20.1", HostARedIPv4)
+	addLinkIPs(LeafA, ClabPrefix+"hostA_blue", "192.168.21.1", HostABlueIPv4)
+	addLinkIPs(LeafB, ClabPrefix+"hostB_red", "192.169.20.1", HostBRedIPv4)
+	addLinkIPs(LeafB, ClabPrefix+"hostB_blue", "192.169.21.1", HostBBlueIPv4)
+}
 
-	// Other leaf links
-	addLinkIPs("clab-kind-leafA", "clab-kind-spine", "192.168.1.1", "192.168.1.0")
-	addLinkIPs("clab-kind-leafB", "clab-kind-spine", "192.168.1.3", "192.168.1.2")
-	addLinkIPs("clab-kind-leafA", "clab-kind-hostA_red", "192.168.20.1", HostARedIPv4)
-	addLinkIPs("clab-kind-leafA", "clab-kind-hostA_blue", "192.168.21.1", HostABlueIPv4)
-	addLinkIPs("clab-kind-leafB", "clab-kind-hostB_red", "192.169.20.1", HostBRedIPv4)
-	addLinkIPs("clab-kind-leafB", "clab-kind-hostB_blue", "192.169.21.1", HostBBlueIPv4)
+// RegisterNodeLinks registers link IPs between peer leaf routers and cluster
+// nodes. Called by ApplyTopologyConfig with values from the topology config file.
+func RegisterNodeLinks(peerLeaf1IP, peerLeaf2IP string, nodeLeaf1IPs, nodeLeaf2IPs map[string]string) {
+	for nodeName, nodeIP := range nodeLeaf1IPs {
+		addLinkIPs(PeerLeaf1, nodeName, peerLeaf1IP, nodeIP)
+	}
+	for nodeName, nodeIP := range nodeLeaf2IPs {
+		addLinkIPs(PeerLeaf2, nodeName, peerLeaf2IP, nodeIP)
+	}
 }
 
 type link struct {

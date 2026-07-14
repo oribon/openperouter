@@ -16,6 +16,7 @@ fi
 
 # Default to single cluster IP map file
 IP_MAP_FILE=${IP_MAP_FILE:-"singlecluster/ip_map.txt"}
+IP_MAP_NODES_FILE=${IP_MAP_NODES_FILE:-"singlecluster/ip_map_nodes.txt"}
 
 assign_ips() {
     echo "Assigning IP addresses to containers for clusters: ${CLUSTER_NAMES[*]}"
@@ -31,6 +32,11 @@ assign_ips() {
     # Run IP assignment tool using CONTAINER_ENGINE_CLI which already
     # includes sudo for podman (via common.sh)
     go run tools/assign_ips/assign_ips.go -file ${IP_MAP_FILE} -engine "${CONTAINER_ENGINE_CLI}"
+
+    if [[ -f "$IP_MAP_NODES_FILE" ]]; then
+        echo "Assigning node IPs from: ${IP_MAP_NODES_FILE}"
+        go run tools/assign_ips/assign_ips.go -file ${IP_MAP_NODES_FILE} -engine "${CONTAINER_ENGINE_CLI}"
+    fi
 
     popd
 }

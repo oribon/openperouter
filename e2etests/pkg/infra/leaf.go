@@ -39,15 +39,15 @@ var (
 		SpineAddress: "192.168.1.2",
 		Container:    LeafBContainer,
 	}
-	LeafKind1Config = LeafKind{
+	PeerLeaf1Config = PeerLeaf{
 		ASN:              64512,
 		SpinePeerAddress: "192.168.1.4",
-		Container:        KindLeaf1Container,
+		Container:        PeerLeaf1Container,
 	}
-	LeafKind2Config = LeafKind{
+	PeerLeaf2Config = PeerLeaf{
 		ASN:              64513,
 		SpinePeerAddress: "192.168.1.6",
-		Container:        KindLeaf2Container,
+		Container:        PeerLeaf2Container,
 	}
 
 	EmptyLeafConfig = LeafConfiguration{
@@ -75,7 +75,7 @@ type LeafConfiguration struct {
 	Default Addresses
 }
 
-type LeafKindConfiguration struct {
+type PeerLeafConfiguration struct {
 	ASN                   int
 	SpinePeerAddress      string
 	EnableBFD             bool
@@ -111,7 +111,7 @@ type Leaf struct {
 	frr.Container
 }
 
-type LeafKind struct {
+type PeerLeaf struct {
 	ASN              int
 	SpinePeerAddress string
 	frr.Container
@@ -145,8 +145,8 @@ func LeafConfigToFRR(config LeafConfiguration) (string, error) {
 	return result.String(), nil
 }
 
-// LeafKindConfigToFRR reads a Go template from the testdata directory and generates a string for leafkind.
-func LeafKindConfigToFRR(config LeafKindConfiguration) (string, error) {
+// PeerLeafConfigToFRR reads a Go template from the testdata directory and generates a string for leafkind.
+func PeerLeafConfigToFRR(config PeerLeafConfiguration) (string, error) {
 	_, currentFile, _, _ := runtime.Caller(0) // current file's path
 	templatePath := filepath.Join(filepath.Dir(currentFile), "testdata", "leafkind.tmpl")
 
@@ -174,7 +174,7 @@ const EnableBFD = true
 // UpdateConfig updates the leafkind configuration file with the given configuration.
 // It takes nodes and automatically builds the neighbors list from their IPs.
 // The behavior can be modified via options.
-func (l LeafKind) UpdateConfig(nodes []corev1.Node, config LeafKindConfiguration) error {
+func (l PeerLeaf) UpdateConfig(nodes []corev1.Node, config PeerLeafConfiguration) error {
 	if config.AddressFamily == "" {
 		config.AddressFamily = ipfamily.IPv4
 	}
@@ -198,7 +198,7 @@ func (l LeafKind) UpdateConfig(nodes []corev1.Node, config LeafKindConfiguration
 	}
 	config.Neighbors = neighbors
 
-	configString, err := LeafKindConfigToFRR(config)
+	configString, err := PeerLeafConfigToFRR(config)
 	if err != nil {
 		return err
 	}
