@@ -714,7 +714,11 @@ func dumpUnderlayVeths(cs clientset.Interface, label string) {
 	}
 
 	for _, node := range nodes {
-		nodeExec := executor.ForContainer(node.Name)
+		nodeExec, err := executor.ForNode(node.Name)
+		if err != nil {
+			w.Printf("DIAG [%s]: failed to get executor for node %s: %v\n", label, node.Name, err)
+			continue
+		}
 
 		for _, iface := range []string{"toswitch1", "toswitch2"} {
 			for _, loc := range []struct {

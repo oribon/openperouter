@@ -11,6 +11,8 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/openperouter/openperouter/e2etests/pkg/config"
 	"github.com/openperouter/openperouter/e2etests/pkg/executor"
+	"github.com/openperouter/openperouter/e2etests/pkg/frrk8s"
+	"github.com/openperouter/openperouter/e2etests/pkg/k8sclient"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -50,4 +52,12 @@ var _ = ginkgo.BeforeSuite(func() {
 	if kubeconfig == "" {
 		ginkgo.Fail("KUBECONFIG not set")
 	}
+
+	cs := k8sclient.New()
+	err := executor.SetupNodeExec(cs, frrk8s.Namespace)
+	Expect(err).NotTo(HaveOccurred(), "failed to setup node-exec-helper")
+})
+
+var _ = ginkgo.AfterSuite(func() {
+	Expect(executor.TeardownNodeExec()).NotTo(HaveOccurred())
 })

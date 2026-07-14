@@ -122,7 +122,8 @@ var _ = Describe("SRV6 routes between bgp and the fabric", Ordered, func() {
 
 		for _, node := range nodes {
 			By(fmt.Sprintf("adding bridge %s on node %s", preExistingOVSBridge, node.Name))
-			exec := executor.ForContainer(node.Name)
+			exec, err := executor.ForNode(node.Name)
+			Expect(err).NotTo(HaveOccurred())
 			_, err = exec.Exec("ovs-vsctl", "add-br", preExistingOVSBridge)
 			Expect(err).NotTo(HaveOccurred())
 		}
@@ -139,8 +140,9 @@ var _ = Describe("SRV6 routes between bgp and the fabric", Ordered, func() {
 	AfterAll(func() {
 		for _, node := range nodes {
 			By(fmt.Sprintf("deleting bridge %s from node %s", preExistingOVSBridge, node.Name))
-			exec := executor.ForContainer(node.Name)
-			_, err := exec.Exec("ovs-vsctl", "--if-exists", "del-br", preExistingOVSBridge)
+			exec, err := executor.ForNode(node.Name)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = exec.Exec("ovs-vsctl", "--if-exists", "del-br", preExistingOVSBridge)
 			Expect(err).NotTo(HaveOccurred())
 		}
 

@@ -71,7 +71,7 @@ var _ = Describe("CNI underlay lifecycle", GroutSupport, Ordered, func() {
 
 	validateCNIInterfacesPresent := func(ifName string) {
 		for _, node := range nodes {
-			Eventually(func() bool {
+			Eventually(func() (bool, error) {
 				return openperouter.IsInterfaceInNS(node.Name, ifName, openperouter.NamedNetns)
 			}, 3*time.Minute, time.Second).Should(BeTrue(),
 				fmt.Sprintf("interface %s should be present in the router netns of %s", ifName, node.Name))
@@ -80,7 +80,7 @@ var _ = Describe("CNI underlay lifecycle", GroutSupport, Ordered, func() {
 
 	validateCNIInterfacesGone := func(ifName string) {
 		for _, node := range nodes {
-			Eventually(func() bool {
+			Eventually(func() (bool, error) {
 				return openperouter.IsInterfaceInNS(node.Name, ifName, openperouter.NamedNetns)
 			}, 3*time.Minute, time.Second).Should(BeFalse(),
 				fmt.Sprintf("interface %s should be gone from the router netns of %s", ifName, node.Name))
@@ -233,7 +233,8 @@ var _ = Describe("CNI underlay lifecycle", GroutSupport, Ordered, func() {
 func cniInterfaceIndexes(nodes []corev1.Node, ifName string) (map[string]string, error) {
 	res := map[string]string{}
 	for _, node := range nodes {
-		exec := executor.ForContainer(node.Name)
+		exec, err := executor.ForNode(node.Name)
+		Expect(err).ToNot(HaveOccurred())
 		out, err := exec.Exec("ip", "netns", "exec", openperouter.NamedNetns, "ip", "-o", "link", "show", "dev", ifName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get %s ifindex on %s: %w", ifName, node.Name, err)
@@ -251,6 +252,7 @@ func cniInterfaceIndexes(nodes []corev1.Node, ifName string) (map[string]string,
 // to become active again with a fresh main PID.
 func restartSystemdUnit(node corev1.Node, unit string) {
 	By(fmt.Sprintf("restarting %s via systemd on node %s", unit, node.Name))
-	nodeExec := executor.ForContainer(node.Name)
+	nodeExec, err := executor.ForNode(node.Name)
+	Expect(err).ToNot(HaveOccurred())
 	Expect(systemd.RestartSystemdUnit(nodeExec, unit)).To(Succeed())
 }

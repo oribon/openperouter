@@ -1222,7 +1222,7 @@ var _ = ginkgo.Describe("Router Host configuration", func() {
 
 			ginkgo.By(fmt.Sprintf("verifying %s exists in the default netns before creating the underlay", underlayNIC))
 			for _, node := range nodes {
-				Eventually(func() bool {
+				Eventually(func() (bool, error) {
 					return openperouter.IsInterfaceInDefaultNetns(node.Name, underlayNIC)
 				}).WithTimeout(30 * time.Second).WithPolling(time.Second).Should(
 					BeTrueBecause("%s should be in the default netns on %s before underlay creation", underlayNIC, node.Name))
@@ -1244,7 +1244,7 @@ var _ = ginkgo.Describe("Router Host configuration", func() {
 
 			ginkgo.By(fmt.Sprintf("verifying %s moved into the perouter netns", underlayNIC))
 			for _, node := range nodes {
-				Eventually(func() bool {
+				Eventually(func() (bool, error) {
 					return openperouter.IsInterfaceInNS(node.Name, underlayNIC, openperouter.NamedNetns)
 				}).WithTimeout(2 * time.Minute).WithPolling(time.Second).Should(BeTrueBecause(
 					"%s should be inside the perouter netns on %s after underlay creation", underlayNIC, node.Name))
@@ -1264,7 +1264,7 @@ var _ = ginkgo.Describe("Router Host configuration", func() {
 
 			ginkgo.By(fmt.Sprintf("verifying %s is back in the default netns after underlay deletion", underlayNIC))
 			for _, node := range nodes {
-				Eventually(func() bool {
+				Eventually(func() (bool, error) {
 					return openperouter.IsInterfaceInDefaultNetns(node.Name, underlayNIC)
 				}).WithTimeout(2 * time.Minute).WithPolling(time.Second).Should(BeTrueBecause(
 					"%s should be back in the default netns on %s after underlay deletion", underlayNIC, node.Name))
@@ -1318,7 +1318,7 @@ var _ = ginkgo.Describe("Router Host configuration", func() {
 
 			ginkgo.By(fmt.Sprintf("waiting for %s to move into the perouter netns", oldNIC))
 			for _, node := range nodes {
-				Eventually(func() bool {
+				Eventually(func() (bool, error) {
 					return openperouter.IsInterfaceInNS(node.Name, oldNIC, openperouter.NamedNetns)
 				}).WithTimeout(2 * time.Minute).WithPolling(time.Second).Should(BeTrueBecause(
 					"%s should be inside the perouter netns on %s", oldNIC, node.Name))
@@ -1326,7 +1326,7 @@ var _ = ginkgo.Describe("Router Host configuration", func() {
 
 			ginkgo.By(fmt.Sprintf("waiting for VNI bridge %s to appear in the perouter netns", vniBridge))
 			for _, node := range nodes {
-				Eventually(func() bool {
+				Eventually(func() (bool, error) {
 					return openperouter.IsInterfaceInNS(node.Name, vniBridge, openperouter.NamedNetns)
 				}).WithTimeout(2 * time.Minute).WithPolling(time.Second).Should(BeTrueBecause(
 					"%s should exist in the perouter netns on %s", vniBridge, node.Name))
@@ -1364,7 +1364,7 @@ var _ = ginkgo.Describe("Router Host configuration", func() {
 
 			ginkgo.By(fmt.Sprintf("waiting for %s to move into the perouter netns", newNIC))
 			for _, node := range nodes {
-				Eventually(func() bool {
+				Eventually(func() (bool, error) {
 					return openperouter.IsInterfaceInNS(node.Name, newNIC, openperouter.NamedNetns)
 				}).WithTimeout(2 * time.Minute).WithPolling(time.Second).Should(BeTrueBecause(
 					"%s should be inside the perouter netns on %s after underlay update", newNIC, node.Name))
@@ -1372,7 +1372,7 @@ var _ = ginkgo.Describe("Router Host configuration", func() {
 
 			ginkgo.By(fmt.Sprintf("verifying %s is back in the default netns with original IPs", oldNIC))
 			for _, node := range nodes {
-				Eventually(func() bool {
+				Eventually(func() (bool, error) {
 					return openperouter.IsInterfaceInDefaultNetns(node.Name, oldNIC)
 				}).WithTimeout(2 * time.Minute).WithPolling(time.Second).Should(BeTrueBecause(
 					"%s should be back in the default netns on %s after underlay update", oldNIC, node.Name))
@@ -1390,7 +1390,7 @@ var _ = ginkgo.Describe("Router Host configuration", func() {
 
 			ginkgo.By(fmt.Sprintf("waiting for VNI bridge %s to be re-established after underlay swap", vniBridge))
 			for _, node := range nodes {
-				Eventually(func() bool {
+				Eventually(func() (bool, error) {
 					return openperouter.IsInterfaceInNS(node.Name, vniBridge, openperouter.NamedNetns)
 				}).WithTimeout(2 * time.Minute).WithPolling(time.Second).Should(BeTrueBecause(
 					"%s should be re-established in the perouter netns on %s after underlay swap", vniBridge, node.Name))
