@@ -73,6 +73,7 @@ var _ = Describe("BridgeRefresher E2E - Type 2 Route Persistence", Ordered, func
 		Expect(Updater.CleanAll()).To(Succeed())
 
 		cs = k8sclient.New()
+		waitForNICRecovery(cs)
 
 		err := Updater.Update(config.Resources{
 			Underlays: []v1alpha1.Underlay{
@@ -150,6 +151,15 @@ var _ = Describe("BridgeRefresher E2E - Type 2 Route Persistence", Ordered, func
 				k8s.OnNode(nodes[0].Name),
 			)
 			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for VXLAN tunnels to establish on test node")
+			nodeExec, err := executor.ForNode(nodes[0].Name)
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(func(g Gomega) {
+				out, err := nodeExec.Exec("ip", "netns", "exec", "perouter", "bridge", "fdb", "show", "dev", "vni110")
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(out).To(ContainSubstring("dst"))
+			}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).Should(Succeed())
 
 			By("Pinging gateway once to establish neighbor entry")
 			podExec := executor.ForPod(testNamespace, silentPod.Name, "busybox")

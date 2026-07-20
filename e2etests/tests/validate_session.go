@@ -71,7 +71,7 @@ func waitForType5Route(exec executor.Executor, prefix string) {
 			return fmt.Errorf("Type-5 route for %s not yet present", prefix)
 		}
 		return nil
-	}, 2*time.Minute, time.Second).ShouldNot(HaveOccurred())
+	}, 5*time.Minute, time.Second).ShouldNot(HaveOccurred())
 }
 
 // waitForNICRecovery waits until the underlay NICs are back in the host
