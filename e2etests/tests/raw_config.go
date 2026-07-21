@@ -31,7 +31,6 @@ var _ = Describe("RawFRRConfig", Ordered, func() {
 		err := Updater.CleanAll()
 		Expect(err).NotTo(HaveOccurred())
 
-		waitForNICRecovery(cs)
 
 		By("waiting for all router pods to be ready after cleanup")
 		Eventually(func() error {

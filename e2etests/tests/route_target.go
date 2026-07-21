@@ -85,7 +85,6 @@ var _ = Describe("Routes with RT between bgp and the fabric", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		cs = k8sclient.New()
-		waitForNICRecovery(cs)
 		routers, err = openperouter.Get(cs, HostMode)
 		Expect(err).NotTo(HaveOccurred())
 

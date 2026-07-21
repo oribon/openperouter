@@ -73,7 +73,6 @@ var _ = Describe("BridgeRefresher E2E - Type 2 Route Persistence", Ordered, func
 		Expect(Updater.CleanAll()).To(Succeed())
 
 		cs = k8sclient.New()
-		waitForNICRecovery(cs)
 
 		err := Updater.Update(config.Resources{
 			Underlays: []v1alpha1.Underlay{

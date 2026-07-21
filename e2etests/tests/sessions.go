@@ -34,7 +34,6 @@ var _ = Describe("Router Host configuration", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		cs = k8sclient.New()
-		waitForNICRecovery(cs)
 		_, err = openperouter.Get(cs, HostMode)
 		Expect(err).NotTo(HaveOccurred())
 		frrk8sPods, err = frrk8s.Pods(cs)
@@ -560,7 +559,6 @@ var _ = Describe("Underlay external and internal configuration", Ordered, func()
 		Expect(err).NotTo(HaveOccurred())
 
 		cs = k8sclient.New()
-		waitForNICRecovery(cs)
 		nodesItems, err := cs.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		nodes = nodesItems.Items
@@ -581,7 +579,6 @@ var _ = Describe("Underlay external and internal configuration", Ordered, func()
 	BeforeEach(func() {
 		err := Updater.CleanAll()
 		Expect(err).NotTo(HaveOccurred())
-		waitForNICRecovery(cs)
 	})
 
 	AfterEach(func() {
@@ -853,7 +850,6 @@ var _ = Describe("Add extra neighbor", Ordered, func() {
 		err := Updater.CleanAll()
 		Expect(err).NotTo(HaveOccurred())
 		cs = k8sclient.New()
-		waitForNICRecovery(cs)
 		nodesItems, err := cs.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		nodes = nodesItems.Items

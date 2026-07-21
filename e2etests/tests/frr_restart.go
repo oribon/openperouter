@@ -61,7 +61,6 @@ var _ = Describe("North/south traffic after FRR container restart", Ordered, fun
 		Expect(err).NotTo(HaveOccurred())
 
 		cs = k8sclient.New()
-		waitForNICRecovery(cs)
 		Eventually(func() error {
 			routers, err = openperouter.Get(cs, HostMode)
 			if err != nil {

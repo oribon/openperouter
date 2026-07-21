@@ -20,7 +20,6 @@ var _ = Describe("Webhooks", func() {
 		cs = k8sclient.New()
 		err := Updater.CleanAll()
 		Expect(err).NotTo(HaveOccurred())
-		waitForNICRecovery(cs)
 	})
 
 	AfterEach(func() {

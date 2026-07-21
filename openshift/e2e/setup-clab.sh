@@ -12,7 +12,7 @@
 #   - Running clab topology wired to extra network bridges
 #   - topology.json for the test suite
 #   - Bootstrap underlay so router pods are healthy (FRR running in perouter)
-#   - Recovery monitor watching for stuck NICs
+#   - rp_filter=0 in perouter (required for asymmetric VXLAN routing)
 #
 # Usage:
 #   export KUBECONFIG=/root/dev-scripts/ocp/ostest/auth/kubeconfig
@@ -131,16 +131,16 @@ node_exec() {
     oc exec -n openperouter-system "${pod}" -- nsenter -t 1 -m -u -i -n "$@"
 }
 
-echo "=== Step 7: Clean stale state ==="
+echo "=== Step 7: Clean stale CRs ==="
+# Clean CRs but do NOT delete perouter netns. The controller reuses NICs
+# already in perouter (with their IPs intact) when a new underlay is created.
+# Deleting perouter destroys virtio NICs on libvirt VMs (they cannot be
+# recovered without virsh detach/reattach).
 oc delete underlay --all -n openperouter-system 2>/dev/null || true
 oc delete l3vni --all -n openperouter-system 2>/dev/null || true
 oc delete l2vni --all -n openperouter-system 2>/dev/null || true
 oc delete frrconfigurations --all -n openshift-frr-k8s 2>/dev/null || true
 sleep 5
-for node in ${NODES}; do
-    node_exec "${node}" ip netns delete perouter 2>/dev/null || true
-done
-sleep 2
 
 echo "=== Step 8: Rename NICs + install udev rules ==="
 for node in ${NODES}; do
@@ -237,11 +237,17 @@ EOF
 echo "  Waiting for BGP sessions..."
 sleep 30
 
-echo "=== Step 12: Start NIC recovery monitor ==="
-pkill -f recover-toswitch 2>/dev/null || true
-sleep 1
-nohup "${SCRIPT_DIR}/recover-toswitch.sh" > /tmp/recover-toswitch.log 2>&1 &
-echo "  PID: $!"
+echo "=== Step 12: Ensure rp_filter=0 defaults in perouter ==="
+# RHCOS defaults rp_filter=1 on all new interfaces. VXLAN return traffic
+# arrives on toswitch2 but source routes via toswitch1 — rp_filter drops it.
+# Set 'default' and 'all' so new interfaces (vni100, br-pe-100, etc.)
+# created by the controller inherit rp_filter=0 automatically.
+for node in ${NODES}; do
+    node_exec "${node}" ip netns exec perouter \
+        sh -c 'sysctl -qw net.ipv4.conf.default.rp_filter=0 net.ipv4.conf.all.rp_filter=0; for f in /proc/sys/net/ipv4/conf/*/rp_filter; do echo 0 > $f 2>/dev/null; done' \
+        2>/dev/null || true
+done
+echo "  rp_filter disabled in perouter on all nodes (default + all + existing)"
 
 echo "=== Step 13: Verify connectivity ==="
 for node in ${NODES}; do

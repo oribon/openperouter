@@ -112,7 +112,6 @@ var _ = Describe("Hybrid mode: static files and API configuration", Label("syste
 		Expect(err).NotTo(HaveOccurred())
 
 		cs = k8sclient.New()
-		waitForNICRecovery(cs)
 		routers, err = openperouter.Get(cs, HostMode)
 		Expect(err).NotTo(HaveOccurred())
 

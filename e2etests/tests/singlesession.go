@@ -98,7 +98,6 @@ var _ = Describe("Single Session Baseline", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		cs = k8sclient.New()
-		waitForNICRecovery(cs)
 		nodesItems, err := cs.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		nodes = nodesItems.Items

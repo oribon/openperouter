@@ -88,7 +88,6 @@ var _ = Describe("Routes between bgp and the fabric with Underlay in ipv4", Orde
 		Expect(err).NotTo(HaveOccurred())
 
 		cs = k8sclient.New()
-		waitForNICRecovery(cs)
 		Eventually(func() error {
 			routers, err = openperouter.Get(cs, HostMode)
 			if err != nil {

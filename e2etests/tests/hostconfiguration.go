@@ -68,7 +68,6 @@ var _ = ginkgo.Describe("Router Host configuration", func() {
 
 		err := Updater.CleanAll()
 		Expect(err).NotTo(HaveOccurred())
-		waitForNICRecovery(cs)
 
 		ginkgo.By("waiting for all router pods to be ready")
 		Eventually(func(g Gomega) {

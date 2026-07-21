@@ -67,7 +67,6 @@ var _ = Describe("Alpha: Named netns and kernel objects survive FRR crash", Orde
 		Expect(err).NotTo(HaveOccurred())
 
 		cs = k8sclient.New()
-		waitForNICRecovery(cs)
 		Eventually(func() error {
 			routers, err = openperouter.Get(cs, HostMode)
 			if err != nil {
@@ -254,7 +253,6 @@ var _ = Describe("Beta: Named netns auto-rebuilds after deletion", Ordered, func
 
 		err := Updater.CleanAll()
 		Expect(err).NotTo(HaveOccurred())
-		waitForNICRecovery(cs)
 
 		By("waiting for all router pods to be ready after cleanup")
 		Eventually(func() error {
