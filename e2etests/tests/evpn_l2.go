@@ -4,6 +4,7 @@ package tests
 
 import (
 	"fmt"
+	"net"
 	"regexp"
 	"strings"
 	"time"
@@ -191,7 +192,11 @@ var _ = Describe("Routes between bgp and the fabric with Underlay in ipv4", Orde
 		}
 
 		By("waiting for Type-5 routes to propagate through fabric before traffic check")
-		waitForType5Route(leafExec, "192.171.24.0/24")
+		for _, gwIP := range tc.l2GatewayIPs {
+			_, subnet, err := net.ParseCIDR(gwIP)
+			Expect(err).NotTo(HaveOccurred())
+			waitForType5Route(leafExec, subnet.String())
+		}
 		waitForType5Route(leafExec, "192.168.20.0/24")
 
 		By("waiting for VXLAN tunnels to establish on test nodes")
