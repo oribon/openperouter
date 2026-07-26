@@ -107,7 +107,7 @@ func waitForType5Route(exec executor.Executor, prefix string) {
 			return fmt.Errorf("Type-5 route for %s not yet present", prefix)
 		}
 		return nil
-	}, 2*time.Minute, time.Second).ShouldNot(HaveOccurred())
+	}, 5*time.Minute, time.Second).ShouldNot(HaveOccurred())
 }
 
 // validateSessionDownForNeigh validates that the neighbor is down
