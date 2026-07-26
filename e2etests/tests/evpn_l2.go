@@ -4,6 +4,7 @@ package tests
 
 import (
 	"fmt"
+	"net"
 	"regexp"
 	"strings"
 	"time"
@@ -190,6 +191,25 @@ var _ = Describe("Routes between bgp and the fabric with Underlay in ipv4", Orde
 					established: Established,
 				},
 			)
+		}
+
+		By("waiting for Type-5 routes to propagate through fabric before traffic check")
+		for _, gwIP := range tc.l2GatewayIPs {
+			_, subnet, err := net.ParseCIDR(gwIP)
+			Expect(err).NotTo(HaveOccurred())
+			waitForType5Route(leafExec, subnet.String())
+		}
+		waitForType5Route(leafExec, "192.168.20.0/24")
+
+		By("waiting for VXLAN tunnels to establish on test nodes")
+		for _, node := range nodes[:2] {
+			nodeExec, err := executor.ForNode(node.Name)
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(func(g Gomega) {
+				out, err := nodeExec.Exec("ip", "netns", "exec", "perouter", "bridge", "fdb", "show", "dev", "vni110")
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(out).To(ContainSubstring("dst"))
+			}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).Should(Succeed())
 		}
 
 		podExecutor := executor.ForPod(firstPod.Namespace, firstPod.Name, "agnhost")
