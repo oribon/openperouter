@@ -4,58 +4,47 @@ Run the OpenPerOuter E2E test suite against an OCP cluster deployed via dev-scri
 
 ## Prerequisites
 
-- RHEL 10 server with OCP installed via dev-scripts (see `SETUP_PEROUTER.md`)
+- RHEL server with OCP installed via dev-scripts
 - dev-scripts config must include:
   ```bash
+  export IP_STACK=v4v6
   export EXTRA_NETWORK_NAMES="toswitch1 toswitch2"
   export TOSWITCH1_NETWORK_SUBNET_V4='192.168.11.0/24'
+  export TOSWITCH1_NETWORK_SUBNET_V6='2001:db8:11::/64'
   export TOSWITCH2_NETWORK_SUBNET_V4='192.168.12.0/24'
+  export TOSWITCH2_NETWORK_SUBNET_V6='2001:db8:12::/64'
   ```
-- OpenPerOuter operator deployed on the cluster
-- FRR-K8s enabled via CNO
-- containerlab installed (`bash -c "$(curl -sL https://get.containerlab.dev)"`)
-- Go installed (for building leaf config generators and `assign_ips` tool)
+- OpenPerOuter operator + FRR-K8s deployed (see `OCP_CI_STATUS.md` Phase 2)
+- `routingViaHost: true` applied via CNO patch
+- containerlab installed
+- Go installed (for building config generators and test binaries)
 
 ## Usage
 
 ```bash
 export KUBECONFIG=/root/dev-scripts/ocp/ostest/auth/kubeconfig
 
-# 1. Set up the clab fabric and wire it to the OCP cluster
-./openshift/e2e/setup-clab.sh
+# 1. Set up the clab fabric
+bash openshift/e2e/setup-clab.sh
 
-# 2. Run the E2E tests
-make e2etest NODELINK_CONFIG=openshift/e2e/nodelink.json \
-  -- --frrk8s-namespace=openshift-frr-k8s
+# 2. Build hostvalidator (must be static)
+CGO_ENABLED=0 go test -c -tags=externaltests -o bin/validatehost ./internal/hostnetwork
 
-# 3. Tear down
-./openshift/e2e/teardown-clab.sh
+# 3. Run the E2E tests
+cd e2etests
+CONTAINER_RUNTIME=podman go test -count 1 -v -timeout 180m ./suite/ \
+  --nodelink-config=/root/openperouter/openshift/e2e/nodelink.json \
+  --frrk8s-namespace=openshift-frr-k8s \
+  --hostvalidator=/root/openperouter/bin/validatehost \
+  -ginkgo.v \
+  -ginkgo.label-filter='!systemdmode' \
+  -ginkgo.skip='editing the underlay parameters|auto-recover when the named netns is deleted|Webhook|Unnumbered'
+
+# 4. Tear down (optional)
+containerlab destroy --runtime podman --topo openshift/e2e/ocp.clab.yml
 ```
 
-## What setup-clab.sh does
+## Documentation
 
-1. Discovers extra network bridges (toswitch1, toswitch2) created by dev-scripts
-2. Generates peerLeaf FRR configs with matching listen ranges
-3. Deploys the containerlab topology (ocp.clab.yml) wired to the bridges
-4. Assigns IPs to clab containers
-5. Runs setup scripts inside leaf and host containers
-6. Renames extra NICs inside worker nodes to `toswitch1`/`toswitch2`
-7. Discovers node IPs on the toswitch network
-8. Generates `nodelink.json`
-9. Cleans stale state and restarts router pods (ensures correct FRR startup order)
-10. Verifies connectivity between nodes and peerLeaf routers
-
-## How it works
-
-dev-scripts' `EXTRA_NETWORK_NAMES` provisions extra NICs on every VM at creation
-time. Each named network gets its own libvirt bridge. The clab topology references
-these bridges via the `kind: bridge` node type, creating a native connection
-between leafkind containers and the OCP VMs — same architecture as the kind setup,
-just with libvirt bridges instead of clab bridge switches.
-
-## Customization
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PEERLEAF1_IP` | `192.168.11.2` | IP for peerLeaf1 on toswitch1 network |
-| `PEERLEAF2_IP` | `192.168.12.2` | IP for peerLeaf2 on toswitch2 network |
+- `OCP_CLAB_SETUP.md` — step-by-step justification of setup-clab.sh, mapped against upstream kind equivalents
+- `OCP_CI_STATUS.md` (repo root) — full status, test results, architecture differences, root cause analysis

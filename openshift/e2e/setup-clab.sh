@@ -149,6 +149,9 @@ echo "=== Step 7: Clean stale CRs ==="
 oc delete underlay --all -n openperouter-system 2>/dev/null || true
 oc delete l3vni --all -n openperouter-system 2>/dev/null || true
 oc delete l2vni --all -n openperouter-system 2>/dev/null || true
+oc delete l3vpn --all -n openperouter-system 2>/dev/null || true
+oc delete l3passthrough --all -n openperouter-system 2>/dev/null || true
+oc delete rawfrrconfig --all -n openperouter-system 2>/dev/null || true
 oc delete frrconfigurations --all -n openshift-frr-k8s 2>/dev/null || true
 sleep 5
 
