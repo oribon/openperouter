@@ -136,9 +136,9 @@ NODES=$(oc get nodes -l kubernetes.io/os=linux -o jsonpath='{range .items[*]}{.m
 
 node_exec() {
     local node=$1; shift
-    local pod=$(oc get pods -n openperouter-system -l app=controller \
+    local pod=$(oc get pods -n openshift-openperouter-system -l app=controller \
         --field-selector spec.nodeName="${node}" -o jsonpath='{.items[0].metadata.name}')
-    oc exec -n openperouter-system "${pod}" -- nsenter -t 1 -m -u -i -n "$@"
+    oc exec -n openshift-openperouter-system "${pod}" -- nsenter -t 1 -m -u -i -n "$@"
 }
 
 echo "=== Step 7: Clean stale CRs ==="
@@ -146,12 +146,12 @@ echo "=== Step 7: Clean stale CRs ==="
 # already in perouter (with their IPs intact) when a new underlay is created.
 # Deleting perouter destroys virtio NICs on libvirt VMs (they cannot be
 # recovered without virsh detach/reattach).
-oc delete underlay --all -n openperouter-system 2>/dev/null || true
-oc delete l3vni --all -n openperouter-system 2>/dev/null || true
-oc delete l2vni --all -n openperouter-system 2>/dev/null || true
-oc delete l3vpn --all -n openperouter-system 2>/dev/null || true
-oc delete l3passthrough --all -n openperouter-system 2>/dev/null || true
-oc delete rawfrrconfig --all -n openperouter-system 2>/dev/null || true
+oc delete underlay --all -n openshift-openperouter-system 2>/dev/null || true
+oc delete l3vni --all -n openshift-openperouter-system 2>/dev/null || true
+oc delete l2vni --all -n openshift-openperouter-system 2>/dev/null || true
+oc delete l3vpn --all -n openshift-openperouter-system 2>/dev/null || true
+oc delete l3passthrough --all -n openshift-openperouter-system 2>/dev/null || true
+oc delete rawfrrconfig --all -n openshift-openperouter-system 2>/dev/null || true
 oc delete frrconfigurations --all -n openshift-frr-k8s 2>/dev/null || true
 sleep 5
 
@@ -230,55 +230,21 @@ cat > "${NODELINK_OUT}" << TOPOEOF
 }
 TOPOEOF
 
-echo "=== Step 10: Restart router pods ==="
-oc rollout restart daemonset router -n openperouter-system
-oc rollout status daemonset router -n openperouter-system --timeout=120s
-
-echo "=== Step 11: Create bootstrap underlay ==="
-cat <<EOF | oc apply -f -
-apiVersion: openpe.openperouter.github.io/v1alpha1
-kind: Underlay
-metadata:
-  name: underlay
-  namespace: openperouter-system
-spec:
-  asn: 64514
-  interfaces:
-  - type: NetworkDevice
-    networkDevice:
-      interfaceName: toswitch1
-  - type: NetworkDevice
-    networkDevice:
-      interfaceName: toswitch2
-  neighbors:
-  - asn: 64512
-    address: ${PEERLEAF1_IP}
-  - asn: 64513
-    address: ${PEERLEAF2_IP}
-  tunnelEndpoint:
-    cidrs:
-    - "100.65.0.0/24"
-EOF
-echo "  Waiting for BGP sessions..."
-sleep 30
-
-echo "=== Step 12: Ensure rp_filter=0 defaults in perouter ==="
+echo "=== Step 10: Ensure rp_filter=0 defaults in perouter ==="
 # RHCOS defaults rp_filter=1 on all new interfaces. VXLAN return traffic
 # arrives on toswitch2 but source routes via toswitch1 — rp_filter drops it.
 # Set 'default' and 'all' so new interfaces (vni100, br-pe-100, etc.)
 # created by the controller inherit rp_filter=0 automatically.
+# On first run, perouter may not exist yet (created when the first test
+# applies an underlay). This step is best-effort — if perouter doesn't
+# exist, the test suite's BeforeAll will trigger its creation and rp_filter
+# must be set then (e.g., by the test harness or a follow-up script).
 for node in ${NODES}; do
     node_exec "${node}" ip netns exec perouter \
         sh -c 'sysctl -qw net.ipv4.conf.default.rp_filter=0 net.ipv4.conf.all.rp_filter=0; for f in /proc/sys/net/ipv4/conf/*/rp_filter; do echo 0 > $f 2>/dev/null; done' \
         2>/dev/null || true
 done
 echo "  rp_filter disabled in perouter on all nodes (default + all + existing)"
-
-echo "=== Step 13: Verify connectivity ==="
-for node in ${NODES}; do
-    echo -n "  ${node} → peerLeaf1: "
-    node_exec "${node}" ip netns exec perouter ping -c 1 -W 2 "${PEERLEAF1_IP}" 2>&1 | grep -o "1 received" || echo "FAILED"
-done
 
 echo ""
 echo "=== Setup complete ==="

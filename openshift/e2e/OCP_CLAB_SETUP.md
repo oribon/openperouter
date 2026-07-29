@@ -114,8 +114,8 @@ done
 
 ### Step 7: Clean stale CRs
 ```bash
-oc delete underlay --all -n openperouter-system
-oc delete l3vni --all -n openperouter-system
+oc delete underlay --all -n openshift-openperouter-system
+oc delete l3vni --all -n openshift-openperouter-system
 ...
 ```
 **Kind equivalent:** None — kind creates a fresh cluster each time. No stale CRs possible.
@@ -147,17 +147,15 @@ ip -6 addr add ${TS1_V6}/64 dev toswitch1
 
 **Necessary:** Yes. Both IP assignment and nodelink generation are required.
 
-### Step 10: Restart router pods
+### ~~Step 10: Restart router pods~~ (REMOVED)
 ```bash
-oc rollout restart daemonset router -n openperouter-system
+oc rollout restart daemonset router -n openshift-openperouter-system
 ```
-**Kind equivalent:** None — kind deploys everything fresh. No stale router state.
+**Status:** Removed from setup-clab.sh.
 
-**Why OCP needs this:** Router pods may have been running from a previous test with stale FRR state (old BGP sessions, old VRFs). The controller's reloader updates the config file but may not clear runtime state. Restarting ensures FRR starts clean.
+**Why removed:** Causes FRR crashloop — the old FRR writes PID lockfiles to `/var/run/frr/` inside perouter netns (host filesystem). When the new pod starts, FRR finds the stale lock and exits with `Could not lock pid_file`. The controller's reloader handles FRR config when the test suite creates underlays — no restart needed.
 
-**Questionable:** The controller SHOULD handle this via config reload when the new underlay is created (step 11). However, restarting is a safe belt-and-suspenders approach. Cost: ~60s for rollout. **Recommend keeping with comment explaining rationale.**
-
-### Step 11: Create bootstrap underlay
+### ~~Step 11: Create bootstrap underlay~~ (REMOVED)
 ```bash
 oc apply -f - <<EOF
 kind: Underlay
@@ -167,11 +165,9 @@ spec:
   tunnelEndpoint: {cidrs: ["100.65.0.0/24"]}
 EOF
 ```
-**Kind equivalent:** None directly — on kind, the test suite creates its own underlays. But the kind setup deploys openperouter via `make deploy-controller`, and the controller creates perouter when the first underlay is applied by the test.
+**Status:** Removed from setup-clab.sh.
 
-**Why OCP needs this:** The perouter netns already exists from a previous run (we never delete it). Router pods need a valid FRR config to avoid CrashLoopBackOff. The bootstrap underlay triggers the controller to configure FRR with BGP neighbors, move NICs into perouter (if not already there), and assign VTEP IPs. Tests then clean this and create their own underlays. Also needed for step 13 verification.
-
-**Necessary:** Yes. Without it, step 13 can't verify connectivity and router pods may be unhealthy.
+**Why removed:** Kind doesn't create a bootstrap underlay either — the test suite's `BeforeAll` creates underlays as needed. The bootstrap was added to support step 13 (verify connectivity) and to prevent router pod unhealthiness, but: (a) step 13 is also removed, (b) router pods are fine without an underlay — they wait for perouter, and the first test triggers its creation.
 
 ### Step 12: rp_filter in perouter
 ```bash
@@ -183,15 +179,13 @@ ip netns exec perouter sysctl -qw net.ipv4.conf.default.rp_filter=0 net.ipv4.con
 
 **Necessary:** Yes. Without this, VXLAN return traffic is dropped on newly-created VNI interfaces.
 
-### Step 13: Verify connectivity
+### ~~Step 13: Verify connectivity~~ (REMOVED)
 ```bash
 ping -c 1 -W 2 "${PEERLEAF1_IP}"
 ```
-**Kind equivalent:** None explicit — kind CI relies on test suite to catch connectivity issues.
+**Status:** Removed from setup-clab.sh.
 
-**Why OCP has this:** OCP setup has more moving parts (libvirt bridges, NIC renaming, IP assignment via nsenter). A quick connectivity check catches configuration errors before the 60+ minute test suite runs.
-
-**Necessary:** Yes (cheap sanity check, saves debugging time).
+**Why removed:** Required the bootstrap underlay (step 11) to have NICs in perouter and BGP up. With step 11 removed, this ping would always fail. Kind doesn't do a connectivity check either — it relies on the test suite to catch issues.
 
 ## Files
 
