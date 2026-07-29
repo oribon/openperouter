@@ -107,7 +107,10 @@ func (o Updater) Update(r Resources) error {
 
 	// Iterating over the map will return the items in a random order.
 	for i, obj := range objects {
-		if obj.GetNamespace() == "" {
+		switch obj.(type) {
+		case *frrk8sv1beta1.FRRConfiguration:
+			obj.SetNamespace(o.frrk8sNamespace)
+		default:
 			obj.SetNamespace(o.namespace)
 		}
 		_, err := controllerutil.CreateOrUpdate(context.Background(), o.cli, obj, func() error {
