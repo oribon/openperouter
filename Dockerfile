@@ -1,5 +1,5 @@
 ARG FRR_IMAGE=quay.io/frrouting/frr:10.6.0
-ARG CNI_PLUGINS_VERSION=v1.6.2
+ARG CNI_PLUGINS_VERSION=012159164d7f552ee7a8ee840447c61611958e87
 
 # Build CNI plugin binaries
 FROM golang:1.26.4 AS cni-plugins-builder
@@ -9,7 +9,10 @@ ARG TARGETOS
 ARG TARGETARCH
 
 WORKDIR /cni-plugins
-RUN git clone --branch ${CNI_PLUGINS_VERSION} --depth 1 https://github.com/containernetworking/plugins.git .
+RUN git init && \
+    git remote add origin https://github.com/containernetworking/plugins.git && \
+    git fetch --depth 1 origin ${CNI_PLUGINS_VERSION} && \
+    git checkout FETCH_HEAD
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} ./build_linux.sh \
   -ldflags "-extldflags -static"
 
