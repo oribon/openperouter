@@ -396,14 +396,13 @@ var _ = Describe("DHCP underlay lifecycle", Ordered, func() {
 					fmt.Sprintf("interface %s should be gone from the router netns of %s",
 						infra.CNIUnderlayInterface, nodeName))
 
-			// https://github.com/containernetworking/plugins/issues/1278
-			// DHCPRELEASE is sent with 0.0.0.0 source IP; dnsmasq ignores it
-			// and the lease remains valid until it expires.
-			// Once the upstream fix lands, change this to:
-			//   Expect(infra.DHCPServerLeaseValid(nodeIP)).To(MatchError(infra.ErrLeaseNotFound))
-			By(fmt.Sprintf("checking lease for IP %q on node %q is still valid (upstream bug #1278)", nodeIP, nodeName))
-			Expect(infra.DHCPServerLeaseValid(nodeIP)).To(Succeed(),
-				"lease should still be valid — upstream bug containernetworking/plugins#1278")
+			By(fmt.Sprintf("checking lease for IP %q on node %q is already cleaned", nodeIP, nodeName))
+			Eventually(func() error {
+				return infra.DHCPServerLeaseValid(nodeIP)
+			}).
+				WithTimeout(time.Minute).
+				WithPolling(5 * time.Second).
+				Should(MatchError(infra.ErrLeaseNotFound))
 		}
 	})
 })
