@@ -165,7 +165,7 @@ var _ = Describe("SRV6 routes between bgp and the fabric", Ordered, func() {
 	})
 
 	AfterEach(func() {
-		dumpIfFails(cs)
+		dumpIfFails(cs, testNamespace)
 		Expect(infra.LeafSRV6Config.Reset()).To(Succeed())
 		Expect(Updater.CleanButUnderlay()).To(Succeed())
 		Expect(k8s.DeleteNamespace(cs, testNamespace)).To(Succeed())

@@ -157,6 +157,32 @@ if err := fetchData(id); err != nil {
 - Controller lifecycle management makes goroutine cleanup complex
 - Prefer controller-runtime's built-in concurrency patterns
 
+## Commit Messages
+
+A commit message must make the **why** crystal clear. The diff already shows
+what changed; the message exists to explain the motivation a reader cannot
+recover from the code. The rules enforced by `commitlint.config.cjs` are the
+mechanical minimum, not the goal.
+
+Structure:
+
+- Subject: `<area>: <what changed>`, imperative mood, max 72 chars, no
+  trailing period.
+- Body: state the motivation in a couple of sentences — the problem, gap, or
+  limitation that made this change necessary. Then explain what the change
+  does about it, and place it in the bigger picture (how it fits the feature,
+  refactor, or migration it belongs to) whenever that context exists.
+- Wrap the body at 72 chars and keep it to a handful of lines. Being explicit
+  about the why is worth the space; restating the diff is not.
+
+Avoid:
+
+- Restating the diff, listing every file touched, or adding
+  "Summary"/"Changes"/"Testing" sections.
+- A body that only paraphrases the subject. If the why is genuinely
+  self-evident (typo fix, generated code refresh, dependency bump), omit the
+  body entirely.
+
 ## Code Review Checklist
 
 When reviewing or writing code, verify:

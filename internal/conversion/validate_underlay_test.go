@@ -363,6 +363,47 @@ func TestValidateUnderlay(t *testing.T) {
 			},
 		},
 		{
+			name: "multiple listen range neighbors with explicit neighbors",
+			underlay: []v1alpha1.Underlay{
+				{
+					Spec: v1alpha1.UnderlaySpec{
+						TunnelEndpoint: &v1alpha1.TunnelEndpointConfig{
+							CIDRs: []string{"192.168.1.0/24"},
+						},
+						Interfaces: []v1alpha1.UnderlayInterface{
+							{
+								Type:          "NetworkDevice",
+								NetworkDevice: &v1alpha1.NetworkDevice{InterfaceName: "eth0"},
+							},
+						},
+						ASN: 65001,
+						Neighbors: []v1alpha1.Neighbor{
+							{
+								Type:        new("internal"),
+								ListenRange: new("192.168.10.0/24"),
+							},
+							{
+								Type:        new("internal"),
+								ListenRange: new("192.168.11.0/24"),
+							},
+							{
+								Type:        new("internal"),
+								ListenRange: new("fd00:10::/64"),
+							},
+							{
+								Type:    new("internal"),
+								Address: new("192.168.10.3"),
+							},
+							{
+								Type:    new("internal"),
+								Address: new("192.168.10.4"),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "valid dual-stack tunnel endpoint",
 			underlay: []v1alpha1.Underlay{
 				{
@@ -381,6 +422,35 @@ func TestValidateUnderlay(t *testing.T) {
 							{
 								ASN:     new(int64(65002)),
 								Address: new("192.168.1.1"),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "multiple neighbors without address do not collide",
+			underlay: []v1alpha1.Underlay{
+				{
+					Spec: v1alpha1.UnderlaySpec{
+						TunnelEndpoint: &v1alpha1.TunnelEndpointConfig{
+							CIDRs: []string{"192.168.1.0/24"},
+						},
+						Interfaces: []v1alpha1.UnderlayInterface{
+							{
+								Type:          "NetworkDevice",
+								NetworkDevice: &v1alpha1.NetworkDevice{InterfaceName: "eth0"},
+							},
+						},
+						ASN: 65001,
+						Neighbors: []v1alpha1.Neighbor{
+							{
+								ASN:       new(int64(65002)),
+								Interface: new("eth0"),
+							},
+							{
+								ASN:       new(int64(65002)),
+								Interface: new("eth1"),
 							},
 						},
 					},
@@ -737,6 +807,122 @@ func TestValidateUnderlay(t *testing.T) {
 				},
 			},
 			wantErrStr: "can't have more than one underlay per node",
+		},
+		{
+			name: "duplicate listen range",
+			underlay: []v1alpha1.Underlay{
+				{
+					Spec: v1alpha1.UnderlaySpec{
+						TunnelEndpoint: &v1alpha1.TunnelEndpointConfig{
+							CIDRs: []string{"192.168.1.0/24"},
+						},
+						Interfaces: []v1alpha1.UnderlayInterface{
+							{
+								Type:          "NetworkDevice",
+								NetworkDevice: &v1alpha1.NetworkDevice{InterfaceName: "eth0"},
+							},
+						},
+						ASN: 65001,
+						Neighbors: []v1alpha1.Neighbor{
+							{
+								Type:        new("internal"),
+								ListenRange: new("192.168.10.0/24"),
+							},
+							{
+								Type:        new("internal"),
+								ListenRange: new("192.168.10.0/24"),
+							},
+						},
+					},
+				},
+			},
+			wantErrStr: "listenRange 192.168.10.0/24 overlaps with listenRange 192.168.10.0/24",
+		},
+		{
+			name: "overlapping listen ranges",
+			underlay: []v1alpha1.Underlay{
+				{
+					Spec: v1alpha1.UnderlaySpec{
+						TunnelEndpoint: &v1alpha1.TunnelEndpointConfig{
+							CIDRs: []string{"192.168.1.0/24"},
+						},
+						Interfaces: []v1alpha1.UnderlayInterface{
+							{
+								Type:          "NetworkDevice",
+								NetworkDevice: &v1alpha1.NetworkDevice{InterfaceName: "eth0"},
+							},
+						},
+						ASN: 65001,
+						Neighbors: []v1alpha1.Neighbor{
+							{
+								Type:        new("internal"),
+								ListenRange: new("192.168.10.0/24"),
+							},
+							{
+								Type:        new("internal"),
+								ListenRange: new("192.168.10.128/25"),
+							},
+						},
+					},
+				},
+			},
+			wantErrStr: "listenRange 192.168.10.0/24 overlaps with listenRange 192.168.10.128/25",
+		},
+		{
+			name: "listen ranges equal after masking host bits",
+			underlay: []v1alpha1.Underlay{
+				{
+					Spec: v1alpha1.UnderlaySpec{
+						TunnelEndpoint: &v1alpha1.TunnelEndpointConfig{
+							CIDRs: []string{"192.168.1.0/24"},
+						},
+						Interfaces: []v1alpha1.UnderlayInterface{
+							{
+								Type:          "NetworkDevice",
+								NetworkDevice: &v1alpha1.NetworkDevice{InterfaceName: "eth0"},
+							},
+						},
+						ASN: 65001,
+						Neighbors: []v1alpha1.Neighbor{
+							{
+								Type:        new("internal"),
+								ListenRange: new("192.168.10.1/24"),
+							},
+							{
+								Type:        new("internal"),
+								ListenRange: new("192.168.10.0/24"),
+							},
+						},
+					},
+				},
+			},
+			wantErrStr: "listenRange 192.168.10.0/24 overlaps with listenRange 192.168.10.0/24",
+		},
+		{
+			name: "invalid listen range",
+			underlay: []v1alpha1.Underlay{
+				{
+					Spec: v1alpha1.UnderlaySpec{
+						TunnelEndpoint: &v1alpha1.TunnelEndpointConfig{
+							CIDRs: []string{"192.168.1.0/24"},
+						},
+						Interfaces: []v1alpha1.UnderlayInterface{
+							{
+								Type:          "NetworkDevice",
+								NetworkDevice: &v1alpha1.NetworkDevice{InterfaceName: "eth0"},
+							},
+						},
+						ASN: 65001,
+						Neighbors: []v1alpha1.Neighbor{
+							{
+								Type:        new("internal"),
+								ListenRange: new("192.168.10.5"),
+							},
+						},
+					},
+				},
+			},
+			wantErrStr: "invalid listenRange 192.168.10.5",
 		},
 	}
 
