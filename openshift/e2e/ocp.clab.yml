@@ -70,6 +70,13 @@ topology:
       binds:
         - ../../clab/hostSRV6_blue/setup.sh:/setup.sh
 
+    dhcp1:
+      kind: linux
+      image: alpine:3.20
+      binds:
+        - ../../clab/singlecluster/dhcp1/dnsmasq.sh:/dnsmasq.sh
+      cmd: /dnsmasq.sh
+
     # Bridge nodes reference pre-existing libvirt bridges created by dev-scripts
     # via EXTRA_NETWORK_NAMES="toswitch1 toswitch2".
     toswitch1:
@@ -91,5 +98,6 @@ topology:
     - endpoints: ["leafSRV6:eth1", "spine:ethsrv6"]
     - endpoints: ["leafSRV6:ethred", "hostSRV6_red:eth1"]
     - endpoints: ["leafSRV6:ethblue", "hostSRV6_blue:eth1"]
+    - endpoints: ["dhcp1:eth1", "toswitch1:dhcp1"]
     - endpoints: ["leafkind1:toswitch1", "toswitch1:lk1"]
     - endpoints: ["leafkind2:toswitch2", "toswitch2:lk2"]
