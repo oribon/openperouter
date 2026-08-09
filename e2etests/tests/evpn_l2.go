@@ -203,8 +203,7 @@ var _ = Describe("Routes between bgp and the fabric with Underlay in ipv4", Orde
 
 		By("waiting for VXLAN tunnels to establish on test nodes")
 		for _, node := range nodes[:2] {
-			nodeExec, err := executor.ForNode(node.Name)
-			Expect(err).NotTo(HaveOccurred())
+			nodeExec := executor.ForNode(node.Name)
 			Eventually(func(g Gomega) {
 				out, err := nodeExec.Exec("ip", "netns", "exec", "perouter", "bridge", "fdb", "show", "dev", "vni110")
 				g.Expect(err).NotTo(HaveOccurred())
