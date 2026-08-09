@@ -153,8 +153,7 @@ var _ = Describe("BridgeRefresher E2E - Type 2 Route Persistence", Ordered, func
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for VXLAN tunnels to establish on test node")
-			nodeExec, err := executor.ForNode(nodes[0].Name)
-			Expect(err).NotTo(HaveOccurred())
+			nodeExec := executor.ForNode(nodes[0].Name)
 			Eventually(func(g Gomega) {
 				out, err := nodeExec.Exec("ip", "netns", "exec", "perouter", "bridge", "fdb", "show", "dev", "vni110")
 				g.Expect(err).NotTo(HaveOccurred())
