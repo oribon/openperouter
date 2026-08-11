@@ -25,26 +25,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 NODELINK_OUT="${SCRIPT_DIR}/nodelink.json"
 
-PEERLEAF1_IP="${PEERLEAF1_IP:-192.168.11.2}"
-PEERLEAF2_IP="${PEERLEAF2_IP:-192.168.12.2}"
-PEERLEAF1_IPV6="${PEERLEAF1_IPV6:-2001:db8:11::2}"
-PEERLEAF2_IPV6="${PEERLEAF2_IPV6:-2001:db8:12::2}"
 
 CLI="sudo podman"
 
-echo "=== Step 1: Discover extra network bridges ==="
-TOSWITCH1_BRIDGE=$(virsh net-info toswitch1 2>/dev/null | grep Bridge | awk '{print $2}') || true
-TOSWITCH2_BRIDGE=$(virsh net-info toswitch2 2>/dev/null | grep Bridge | awk '{print $2}') || true
-
-if [ -z "${TOSWITCH1_BRIDGE}" ] || [ -z "${TOSWITCH2_BRIDGE}" ]; then
-    echo "ERROR: Could not find extra network bridges."
-    echo "  Make sure dev-scripts config has: EXTRA_NETWORK_NAMES=\"toswitch1 toswitch2\""
-    exit 1
-fi
-echo "  toswitch1 bridge: ${TOSWITCH1_BRIDGE}"
-echo "  toswitch2 bridge: ${TOSWITCH2_BRIDGE}"
-
-echo "=== Step 1b: Disable DHCP on extra networks ==="
+echo "=== Step 1: Disable DHCP on extra networks ==="
 # dev-scripts enables DHCP by default. DHCP IPs compete with our static IPs
 # and expire after 60 minutes, breaking VXLAN routing. We assign all IPs
 # statically, so DHCP is not needed. Use virsh net-update to remove the DHCP
@@ -106,16 +90,6 @@ go run tools/assign_ips/assign_ips.go \
 ${CLI} exec clab-kind-leafkind1 ip link set dev toswitch1 mtu 1500
 ${CLI} exec clab-kind-leafkind2 ip link set dev toswitch2 mtu 1500
 
-# Assign leafkind IPs on the bridge-facing interfaces — IPv4 + IPv6
-${CLI} exec clab-kind-leafkind1 ip addr add "${PEERLEAF1_IP}/24" dev toswitch1
-${CLI} exec clab-kind-leafkind1 ip -6 addr add "${PEERLEAF1_IPV6}/64" dev toswitch1
-${CLI} exec clab-kind-leafkind2 ip addr add "${PEERLEAF2_IP}/24" dev toswitch2
-${CLI} exec clab-kind-leafkind2 ip -6 addr add "${PEERLEAF2_IPV6}/64" dev toswitch2
-
-echo "=== Step 5b: Enable IPv6 forwarding on spine ==="
-# Needed for SRV6 IS-IS transit between leafkind and leafSRV6
-${CLI} exec clab-kind-spine sysctl -qw net.ipv6.conf.all.forwarding=1
-echo "  IPv6 forwarding enabled on spine"
 
 echo "=== Step 6: Run container setup scripts ==="
 for c in leafA leafB leafSRV6 hostA_red hostA_blue hostA_default hostB_red hostB_blue hostSRV6_red hostSRV6_blue; do

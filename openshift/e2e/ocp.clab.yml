@@ -7,6 +7,8 @@ topology:
       binds:
         - ../../clab/frrcommon/daemons:/etc/frr/daemons
         - ../../clab/frrcommon/vtysh.conf:/etc/frr/vtysh.conf
+      exec:
+        - sysctl -w net.ipv6.conf.all.forwarding=1
     agnhost:
       kind: linux
       image: "k8s.gcr.io/e2e-test-images/agnhost:2.40"

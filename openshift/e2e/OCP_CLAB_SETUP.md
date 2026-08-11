@@ -8,7 +8,7 @@ The kind CI runs `clab/setup.sh` which orchestrates scripts `00` through `10`:
 
 | Script | What | OCP Equivalent |
 |--------|------|----------------|
-| `00-environment.sh` | Creates bridges (`leafkind1-sw`, `leafkind2-sw`), checks for kind binary | **Step 1**: Discovers pre-existing libvirt bridges |
+| `00-environment.sh` | Creates bridges, checks for kind binary | **Not needed**: dev-scripts creates libvirt bridges via `EXTRA_NETWORK_NAMES` |
 | `01-registry.sh` | Starts local Docker registry for kind | **Not needed**: OCP uses real registries |
 | `02-leaf-configs.sh` | Generates FRR configs for leafA, leafB, leafkind1, leafkind2 | **Step 2**: Same — generates identical FRR configs |
 | `03-kind-configs.sh` | Generates kind cluster YAML | **Not needed**: OCP provisioned by dev-scripts |
@@ -22,15 +22,7 @@ The kind CI runs `clab/setup.sh` which orchestrates scripts `00` through `10`:
 
 ## setup-clab.sh Steps
 
-### Step 1: Discover extra network bridges
-```bash
-TOSWITCH1_BRIDGE=$(virsh net-info toswitch1 | grep Bridge | awk '{print $2}')
-```
-**Kind equivalent:** `00-environment.sh` creates bridges `leafkind1-sw`/`leafkind2-sw` with `ip link add type bridge`.
-
-**Why OCP is different:** On kind, clab creates the bridges. On OCP, dev-scripts creates libvirt networks via `EXTRA_NETWORK_NAMES="toswitch1 toswitch2"`. Each libvirt network has a bridge (e.g., `virbr3`). We discover the bridge name because clab's `kind: bridge` node type needs the exact Linux bridge name.
-
-### Step 1b: Disable DHCP on extra networks
+### Step 1: Disable DHCP on extra networks
 ```bash
 virsh net-update "${net}" delete ip-dhcp-range "${DHCP_RANGE}" --live --config
 ```
@@ -44,7 +36,7 @@ virsh net-update "${net}" delete ip-dhcp-range "${DHCP_RANGE}" --live --config
 ```
 **Kind equivalent:** `02-leaf-configs.sh` — identical commands, identical parameters.
 
-**Why same:** The fabric topology (leafA, leafB, spine, leafkind1, leafkind2) is the same on both platforms. The leafkind FRR configs use `interface toswitch1` for IS-IS and `bgp listen range 192.168.11.0/24` for dynamic peers — both work identically because the clab endpoint naming matches (`leafkind1:toswitch1`).
+**Why same:** The fabric topology (leafA, leafB, spine, leafkind1, leafkind2) is the same on both platforms. LeafA/leafB configs are gitignored and must be generated. The leafkind FRR configs use `interface toswitch1` for IS-IS and `bgp listen range 192.168.11.0/24` for dynamic peers — both work identically because the clab endpoint naming matches (`leafkind1:toswitch1`).
 
 ### Step 3: Enable podman socket
 ```bash
@@ -66,25 +58,12 @@ containerlab deploy --runtime podman --topo ocp.clab.yml --reconfigure
 ```bash
 go run tools/assign_ips/assign_ips.go -file ip_map_ocp.txt -engine "sudo podman"
 ip link set dev toswitch1 mtu 1500   # on leafkind1/2
-ip addr add 192.168.11.2/24 dev toswitch1  # on leafkind1
 ```
 **Kind equivalent:** `08-ip-assignment.sh` — same `assign_ips` tool, different ip_map file (`ip_map.txt` vs `ip_map_ocp.txt`).
 
 **Why OCP is different:**
-- **ip_map_ocp.txt** — same as kind's `ip_map.txt` for spine/leaf/host IPs, but excludes kind node IPs (those are assigned in step 8 via nsenter, not via clab exec).
-- **MTU fix** — kind bridges are at MTU 9500 (clab default). Libvirt bridges are MTU 1500. Clab creates leafkind's `toswitch1` veth at MTU 9500. IS-IS PDUs from leafkind1 get dropped by the 1500-MTU libvirt bridge. Must match MTU.
-- **Leafkind bridge IPs** — on kind, the `ip_map.txt` assigns leafkind IPs on the bridge-facing interfaces because those interfaces are in the same ip_map. On OCP, leafkind's bridge-facing interface (`toswitch1`) is created by a clab link to a `kind: bridge` node — it's not in the upstream ip_map. We assign manually.
-
-### Step 5b: rp_filter on clab containers + IPv6 forwarding
-```bash
-for c in spine leafA leafB leafkind1 leafkind2 leafSRV6; do
-    podman exec $c sh -c 'for f in /proc/sys/net/ipv4/conf/*/rp_filter; do echo 0 > $f; done'
-done
-podman exec clab-kind-spine sysctl -qw net.ipv6.conf.all.forwarding=1
-```
-**Kind equivalent:** None explicit — on kind, rp_filter defaults to 0 in container network namespaces.
-
-**Why OCP needs this:** RHCOS defaults `rp_filter=1`. Clab containers on RHCOS inherit this from the host. VXLAN traffic is asymmetric (forward via leafkind1, return via leafkind2). Strict rp_filter drops the return. IPv6 forwarding on spine is needed for IS-IS transit between leafkind and leafSRV6.
+- **ip_map_ocp.txt** — same as kind's `ip_map.txt` for spine/leaf/host IPs and leafkind toswitch IPs, but excludes kind node IPs (those are assigned in step 8 via nsenter, not via clab exec).
+- **MTU fix** — clab creates veths at MTU 9500 by default. The libvirt bridge is MTU 1500. If the leafkind toswitch1 veth doesn't auto-negotiate to the bridge MTU, IS-IS PDUs get dropped. The `mtu 1500` ensures they match.
 
 ### Step 6: Run container setup scripts
 ```bash
@@ -115,20 +94,12 @@ ip -6 addr add ${TS1_V6}/64 dev toswitch1
 
 **Why OCP is different:** OCP nodes are VMs, not containers. We can't `docker exec` into them. We use `nsenter` via controller pods to run commands in the node's host netns. The nodelink.json is also generated here (kind's `nodelink-default.json` is static/checked-in because kind always has the same nodes with the same IPs).
 
-### Step 9: rp_filter in perouter
-```bash
-ip netns exec perouter sysctl -qw net.ipv4.conf.default.rp_filter=0 net.ipv4.conf.all.rp_filter=0
-```
-**Kind equivalent:** None — kind nodes default to rp_filter=0.
-
-**Why OCP needs this:** RHCOS defaults `rp_filter=1` on ALL new interfaces, including those created by the controller inside perouter (vni100, br-pe-100, etc.). Must set `default=0` and `all=0` so new interfaces inherit rp_filter=0 automatically. The step 5b rp_filter only covers clab containers, not the perouter netns inside OCP nodes. Best-effort — on first run perouter may not exist yet.
-
 ## Files
 
 | File | Purpose |
 |------|---------|
 | `setup-clab.sh` | Main setup script — all steps above |
 | `ocp.clab.yml` | Clab topology — same fabric as kind but with libvirt bridge references |
-| `ip_map_ocp.txt` | IP assignments for clab containers (spine, leafA/B, hosts, leafSRV6) |
+| `ip_map_ocp.txt` | IP assignments for clab containers (spine, leafA/B, leafkind, hosts, leafSRV6) |
 | `README.md` | Quick-start for running tests |
 | `OCP_CLAB_SETUP.md` | This file |
