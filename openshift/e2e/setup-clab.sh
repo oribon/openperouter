@@ -11,14 +11,14 @@
 # Produces:
 #   - Running clab topology wired to extra network bridges
 #   - nodelink.json for the test suite
-#   - Bootstrap underlay so router pods are healthy (FRR running in perouter)
 #   - rp_filter=0 in perouter (required for asymmetric VXLAN routing)
 #
 # Usage:
 #   export KUBECONFIG=/root/dev-scripts/ocp/ostest/auth/kubeconfig
 #   ./openshift/e2e/setup-clab.sh
 #   cd e2etests && CONTAINER_RUNTIME=podman go test -v ./suite/ \
-#     --nodelink-config=../openshift/e2e/nodelink.json --frrk8s-namespace=openshift-frr-k8s
+#     --nodelink-config=../openshift/e2e/nodelink.json \
+#     --frrk8s-namespace=openshift-frr-k8s --openperouter-namespace=openshift-openperouter-system
 
 set -euo pipefail
 
@@ -48,15 +48,14 @@ echo "  toswitch2 bridge: ${TOSWITCH2_BRIDGE}"
 echo "=== Step 1b: Disable DHCP on extra networks ==="
 # dev-scripts enables DHCP by default. DHCP IPs compete with our static IPs
 # and expire after 60 minutes, breaking VXLAN routing. We assign all IPs
-# statically, so DHCP is not needed. Kill dnsmasq (don't virsh net-destroy
-# which disconnects running VMs from the bridge).
+# statically, so DHCP is not needed. Use virsh net-update to remove the DHCP
+# range from the live network (--live) and persist across restarts (--config).
 for net in toswitch1 toswitch2; do
-    DNSMASQ_PID=$(cat /var/run/libvirt/network/${net}.pid 2>/dev/null) || true
-    if [ -n "${DNSMASQ_PID}" ] && kill -0 "${DNSMASQ_PID}" 2>/dev/null; then
-        kill "${DNSMASQ_PID}"
-        echo "  ${net}: killed dnsmasq (PID ${DNSMASQ_PID})"
+    DHCP_RANGE=$(virsh net-dumpxml "${net}" 2>/dev/null | grep '<range' | sed 's/^ *//' ) || true
+    if [ -n "${DHCP_RANGE}" ]; then
+        virsh net-update "${net}" delete ip-dhcp-range "${DHCP_RANGE}" --live --config 2>/dev/null &&             echo "  ${net}: removed DHCP range" || echo "  ${net}: failed to remove DHCP range"
     else
-        echo "  ${net}: dnsmasq not running"
+        echo "  ${net}: no DHCP range configured"
     fi
 done
 
@@ -141,21 +140,7 @@ node_exec() {
     oc exec -n openshift-openperouter-system "${pod}" -- nsenter -t 1 -m -u -i -n "$@"
 }
 
-echo "=== Step 7: Clean stale CRs ==="
-# Clean CRs but do NOT delete perouter netns. The controller reuses NICs
-# already in perouter (with their IPs intact) when a new underlay is created.
-# Deleting perouter destroys virtio NICs on libvirt VMs (they cannot be
-# recovered without virsh detach/reattach).
-oc delete underlay --all -n openshift-openperouter-system 2>/dev/null || true
-oc delete l3vni --all -n openshift-openperouter-system 2>/dev/null || true
-oc delete l2vni --all -n openshift-openperouter-system 2>/dev/null || true
-oc delete l3vpn --all -n openshift-openperouter-system 2>/dev/null || true
-oc delete l3passthrough --all -n openshift-openperouter-system 2>/dev/null || true
-oc delete rawfrrconfig --all -n openshift-openperouter-system 2>/dev/null || true
-oc delete frrconfigurations --all -n openshift-frr-k8s 2>/dev/null || true
-sleep 5
-
-echo "=== Step 8: Rename NICs + install udev rules ==="
+echo "=== Step 7: Rename NICs + install udev rules ==="
 for node in ${NODES}; do
     short_name="${node%%.*}"
     vm_name="ostest_${short_name//-/_}"
@@ -184,7 +169,7 @@ for node in ${NODES}; do
     done
 done
 
-echo "=== Step 9: Assign static IPs (IPv4 + IPv6) ==="
+echo "=== Step 8: Assign static IPs (IPv4 + IPv6) ==="
 NODE_INDEX=0
 NODES_JSON=""
 for node in ${NODES}; do
@@ -230,7 +215,7 @@ cat > "${NODELINK_OUT}" << TOPOEOF
 }
 TOPOEOF
 
-echo "=== Step 10: Ensure rp_filter=0 defaults in perouter ==="
+echo "=== Step 9: Ensure rp_filter=0 defaults in perouter ==="
 # RHCOS defaults rp_filter=1 on all new interfaces. VXLAN return traffic
 # arrives on toswitch2 but source routes via toswitch1 — rp_filter drops it.
 # Set 'default' and 'all' so new interfaces (vni100, br-pe-100, etc.)
