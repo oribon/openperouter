@@ -484,6 +484,16 @@ var _ = Describe("Disconnected L2VNI east/west traffic", Ordered, func() {
 		Expect(removeGatewayFromPod(firstPod)).To(Succeed())
 		Expect(removeGatewayFromPod(secondPod)).To(Succeed())
 
+		By("waiting for VXLAN tunnels to establish on test nodes")
+		for _, node := range nodes[:2] {
+			nodeExec := executor.ForNode(node.Name)
+			Eventually(func(g Gomega) {
+				out, err := nodeExec.Exec("ip", "netns", "exec", "perouter", "bridge", "fdb", "show", "dev", "vni300")
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(out).To(ContainSubstring("dst"))
+			}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).Should(Succeed())
+		}
+
 		By("checking bidirectional L2 reachability")
 		canPingFromPod(executor.ForPod(firstPod.Namespace, firstPod.Name, "agnhost"), secondPodIP)
 		canPingFromPod(executor.ForPod(secondPod.Namespace, secondPod.Name, "agnhost"), firstPodIP)
