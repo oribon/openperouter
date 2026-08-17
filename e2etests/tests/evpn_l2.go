@@ -211,6 +211,23 @@ var _ = Describe("Routes between bgp and the fabric with Underlay in ipv4", Orde
 			}).WithTimeout(2 * time.Minute).WithPolling(2 * time.Second).Should(Succeed())
 		}
 
+		By("waiting for Type-2 routes for the pods to propagate to the fabric leaves")
+		leafAExec := executor.ForContainer(infra.LeafA)
+		leafBExec := executor.ForContainer(infra.LeafB)
+		podIPs := append(append([]string{}, tc.firstPodIPs...), tc.secondPodIPs...)
+		for _, podIP := range podIPs {
+			ip := discardAddressLength(podIP)
+			// IPv6 endpoints do not emit an unsolicited NA on address
+			// assignment, so their Type-2 MAC/IP route is only advertised once
+			// traffic triggers ND. Waiting for it pre-traffic would deadlock;
+			// the reachability curl below drives that convergence instead.
+			if net.ParseIP(ip).To4() == nil {
+				continue
+			}
+			waitForType2Route(leafAExec, ip)
+			waitForType2Route(leafBExec, ip)
+		}
+
 		podExecutor := executor.ForPod(firstPod.Namespace, firstPod.Name, "agnhost")
 		secondPodExecutor := executor.ForPod(secondPod.Namespace, secondPod.Name, "agnhost")
 		hostARedExecutor := executor.ForContainer("clab-kind-hostA_red")

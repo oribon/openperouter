@@ -110,6 +110,25 @@ func waitForType5Route(exec executor.Executor, prefix string) {
 	}, 5*time.Minute, time.Second).ShouldNot(HaveOccurred())
 }
 
+// waitForType2Route waits until a Type-2 MAC/IP route for the given bare IP is
+// present in the leaf's EVPN table. Endpoint reachability across the fabric
+// depends on the return path being a host route: without the Type-2 route the
+// leaf falls back to the Type-5 subnet prefix, which is ECMP across every node
+// advertising the connected subnet and blackholes replies on all but the node
+// actually hosting the endpoint.
+func waitForType2Route(exec executor.Executor, ip string) {
+	Eventually(func() error {
+		evpn, err := frr.EVPNInfo(exec)
+		if err != nil {
+			return err
+		}
+		if !evpn.ContainsType2MACIPRoute(ip) {
+			return fmt.Errorf("Type-2 route for %s not yet present", ip)
+		}
+		return nil
+	}, 5*time.Minute, time.Second).ShouldNot(HaveOccurred())
+}
+
 // validateSessionDownForNeigh validates that the neighbor is down
 // or if the session does not exist.
 func validateSessionDownForNeigh(exec executor.Executor, neighborIP string) {
