@@ -129,6 +129,34 @@ func waitForType2Route(exec executor.Executor, ip string) {
 	}, 5*time.Minute, time.Second).ShouldNot(HaveOccurred())
 }
 
+// waitForUnderlayTORSession blocks until the underlay BGP session between every
+// node's perouter and the given kind leaf is Established, as seen from the leaf.
+// Applying or reconfiguring the underlay tears these sessions down and they take
+// time to reconverge; asserting fabric routes before the underlay is back up
+// races that reconvergence and times out on whichever node reconverges last.
+//
+// neighborIP resolves the router side session address for the i-th node, which
+// differs per underlay flavor (the toswitch device address for the NetworkDevice
+// mode, a CNI or DHCP assigned address otherwise), so callers pass the resolver
+// that matches the underlay under test.
+func waitForUnderlayTORSession(leaf string, nodes []corev1.Node, neighborIP func(int, corev1.Node) (string, error)) {
+	GinkgoHelper()
+	leafExec := executor.ForContainer(leaf)
+	for i, node := range nodes {
+		ip, err := neighborIP(i, node)
+		Expect(err).NotTo(HaveOccurred())
+		validateSessionWithNeighbor(
+			leafExec,
+			validationParameters{
+				fromName:    leaf,
+				toName:      node.Name,
+				neighborIP:  ip,
+				established: Established,
+			},
+		)
+	}
+}
+
 // validateSessionDownForNeigh validates that the neighbor is down
 // or if the session does not exist.
 func validateSessionDownForNeigh(exec executor.Executor, neighborIP string) {
